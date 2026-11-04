@@ -1,0 +1,38 @@
+{
+  "name": "airwheels",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm setup:env && pnpm infra:up && pnpm db:migrate && pnpm db:seed && pnpm dev:apps",
+    "driver": "pnpm --filter @airwheels/driver start",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "db:migrate": "pnpm --filter @airwheels/api prisma:deploy",
+    "db:seed": "pnpm --filter @airwheels/api prisma:seed",
+    "openapi": "pnpm --filter @airwheels/api openapi && pnpm --filter @airwheels/api-client generate",
+    "mock:booking": "pnpm --filter @airwheels/mock-airline send booking",
+    "format": "prettier --write .",
+    "db:migrate:dev": "pnpm --filter @airwheels/api prisma:migrate",
+    "setup:env": "node scripts/setup.mjs",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "dev:apps": "turbo run dev --filter=!@airwheels/driver --filter=!@airwheels/types --filter=!@airwheels/ui --filter=!@airwheels/api-client"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
+  }
+}

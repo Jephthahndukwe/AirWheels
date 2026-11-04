@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  checks:
+    name: Lint, type-check, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: OpenAPI spec and client are up to date
+        run: |
+          pnpm openapi
+          git diff --exit-code -- packages/api-client || (echo "Run 'pnpm openapi' and commit the result." && exit 1)
+
+  smoke:
+    name: Mock airline booking is stored (Postgres + Redis)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: airwheels, POSTGRES_PASSWORD: airwheels, POSTGRES_DB: airwheels }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U airwheels" --health-interval 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 3s --health-retries 20
+    env:
+      NODE_ENV: development # enables the dev-only admin route used by checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm setup:env
+      - run: pnpm --filter @airwheels/types --filter @airwheels/ui build
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - run: pnpm --filter @airwheels/api build
+      - name: Start API
+        run: |
+          pnpm --filter @airwheels/api start > api.log 2>&1 &
+          npx --yes wait-on -t 60000 http://localhost:4000/v1/health
+      - run: pnpm --filter @airwheels/mock-airline smoke
+      - if: failure()
+        run: cat api.log
+
+  e2e-web:
+    name: Playwright (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @airwheels/web... build
+      - run: pnpm --filter @airwheels/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @airwheels/web test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: playwright-report, path: apps/web/playwright-report }

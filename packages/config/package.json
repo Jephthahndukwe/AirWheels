@@ -1,0 +1,13 @@
+{
+  "name": "@airwheels/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.config.js",
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/nest.json": "./tsconfig/nest.json",
+    "./tsconfig/next.json": "./tsconfig/next.json",
+    "./tsconfig/library.json": "./tsconfig/library.json"
+  }
+}

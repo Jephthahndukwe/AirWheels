@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Airwheels Driver",
+    "slug": "airwheels-driver",
+    "scheme": "airwheels-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "ng.airwheels.driver",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Airwheels shares your location with travellers and ops only while you are on duty.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Airwheels keeps sharing your location on a job when the app is in the background, so travellers can see you coming.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "ng.airwheels.driver",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-font",
+      "expo-secure-store",
+      ["expo-location", { "isAndroidBackgroundLocationEnabled": true }],
+      "@sentry/react-native"
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

@@ -1,0 +1,1111 @@
+// Airwheels data model (PRD section 18).
+// Rules: UUID primary keys, every timestamp is UTC (timestamptz), money is integer kobo (Int/BigInt),
+// every table has createdAt/updatedAt. Append-only tables are marked in comments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- enums ----------
+
+enum BookingChannel {
+  ADDON
+  WIDGET
+  LINK
+  OWN_PAGE
+  OPS
+}
+
+enum Plan {
+  STANDARD
+  FLEX
+}
+
+enum RideType {
+  PRIVATE
+  SHARED
+}
+
+enum LegType {
+  DEPARTURE
+  ARRIVAL
+}
+
+enum VehicleClass {
+  SEDAN
+  SUV
+  VAN
+}
+
+enum PowerType {
+  ELECTRIC
+  HYBRID
+  PETROL
+}
+
+enum CollectedBy {
+  AIRLINE
+  AIRWHEELS
+}
+
+enum BookingStatus {
+  QUOTED
+  PENDING_PAYMENT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  PAYMENT_FAILED
+  REJECTED
+  CANCELLING
+  CANCELLED
+  REFUNDING
+  REFUNDED
+}
+
+enum LegStatus {
+  SCHEDULED
+  ASSIGNED
+  DRIVER_CONFIRMED
+  EN_ROUTE
+  ARRIVED
+  PICKED_UP
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SharedGroupStatus {
+  OPEN
+  LOCKED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  DISSOLVED
+}
+
+enum DriverStatus {
+  INVITED
+  ACTIVATED
+  ACTIVE
+  SUSPENDED
+}
+
+enum AdminRole {
+  OPS_AGENT
+  SUPER_ADMIN
+  FINANCE
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AirlineStatus {
+  ACTIVE
+  PAUSED
+  OFFBOARDED
+}
+
+enum CredentialStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum FlightSource {
+  AIRLINE
+  BACKUP_API
+  OPS
+  DRIVER
+  TRAVELLER
+}
+
+enum Confidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum FlightStatus {
+  SCHEDULED
+  DELAYED
+  DEPARTED
+  LANDED
+  CANCELLED
+  DIVERTED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  ABANDONED
+}
+
+enum SettlementStatus {
+  DRAFT
+  SENT
+  PAID
+  DISPUTED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  REVENUE
+  EXPENSE
+  EQUITY
+}
+
+enum RefundRoute {
+  AIRLINE
+  PAYSTACK
+}
+
+enum RefundStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum EarningType {
+  TRIP
+  STANDBY
+  BONUS
+  ADJUSTMENT
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  SENT
+  FAILED
+}
+
+enum PricingRuleType {
+  ZONE_FARE
+  CEILING
+  SURCHARGE
+  PLAN
+  FEE
+  VEHICLE_CLASS
+  DISCOUNT
+  SHARED_SHARE
+  MARGIN_FLOOR
+  REVENUE_SHARE
+}
+
+enum DispatchPlanStatus {
+  PROPOSED
+  CONFIRMED
+  LOCKED
+}
+
+enum OfferResponse {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum ActorRole {
+  TRAVELLER
+  DRIVER
+  OPS
+  SYSTEM
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  PUSH
+  OPS_CHAT
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum PickupPointType {
+  DEPARTURE_DROPOFF
+  ARRIVAL_PICKUP
+  MEETING_POINT
+}
+
+enum Direction {
+  TO_AIRPORT
+  FROM_AIRPORT
+}
+
+// ---------- airlines ----------
+
+model Airline {
+  id                   String                @id @default(uuid()) @db.Uuid
+  name                 String
+  code                 String                @unique // IATA code, e.g. P4
+  serviceBrandName     String // e.g. "Air Peace Transfers" (CHN-12)
+  status               AirlineStatus         @default(ACTIVE)
+  quoteExpiryMinutes   Int                   @default(30)
+  revenueShareBps      Int                   @default(0) // basis points of the transfer price the airline keeps
+  settlementTerms      Json?
+  webhookUrl           String?
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @db.Timestamptz(3)
+  credentials          AirlineCredential[]
+  themes               AirlineTheme[]
+  templates            MessageTemplate[]
+  bookings             TransferBooking[]
+  settlementStatements SettlementStatement[]
+  quotes               Quote[]
+}
+
+model AirlineCredential {
+  id              String           @id @default(uuid()) @db.Uuid
+  airlineId       String           @db.Uuid
+  airline         Airline          @relation(fields: [airlineId], references: [id])
+  keyId           String           @unique
+  /// HMAC verification needs the secret itself, so it is stored AES-256-GCM encrypted with APP_ENCRYPTION_KEY
+  /// rather than hashed. See apps/api/src/common/crypto.ts.
+  secretEncrypted String
+  allowedIps      String[]
+  status          CredentialStatus @default(ACTIVE)
+  rotatedAt       DateTime?        @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+}
+
+model AirlineTheme {
+  id        String   @id @default(uuid()) @db.Uuid
+  airlineId String   @db.Uuid
+  airline   Airline  @relation(fields: [airlineId], references: [id])
+  colours   Json
+  font      String?
+  logoUrl   String?
+  wording   Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model MessageTemplate {
+  id           String              @id @default(uuid()) @db.Uuid
+  airlineId    String?             @db.Uuid // null = Airwheels own channel
+  airline      Airline?            @relation(fields: [airlineId], references: [id])
+  event        String
+  channel      NotificationChannel
+  language     String              @default("en")
+  body         String
+  buttons      Json?
+  providerName String? // approved WhatsApp template name
+  version      Int                 @default(1)
+  approved     Boolean             @default(false)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@unique([airlineId, event, channel, language, version])
+}
+
+// ---------- users, drivers, admins ----------
+
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  phone         String?       @unique
+  phoneVerified Boolean       @default(false)
+  email         String?       @unique
+  passwordHash  String?
+  status        UserStatus    @default(ACTIVE)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+  driverProfile DriverProfile?
+  adminProfile  AdminProfile?
+}
+
+model DriverProfile {
+  id                 String              @id @default(uuid()) @db.Uuid
+  userId             String              @unique @db.Uuid
+  user               User                @relation(fields: [userId], references: [id])
+  firstName          String
+  lastName           String
+  photoUrl           String?
+  status             DriverStatus        @default(INVITED)
+  kycProvider        String?
+  kycResult          Json?
+  kycVerifiedAt      DateTime?           @db.Timestamptz(3)
+  ratingAvg          Float?
+  ratingCount        Int                 @default(0)
+  pinHash            String?
+  deviceId           String?
+  onDuty             Boolean             @default(false)
+  startLat           Float?
+  startLng           Float?
+  trainingChecklist  Json?
+  bankAccount        Json?
+  createdByAdminId   String?             @db.Uuid
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  invites            DriverInvite[]
+  vehicleAssignments VehicleAssignment[]
+  legs               RideLeg[]
+  offers             DispatchOffer[]
+  earnings           DriverEarning[]
+  payouts            Payout[]
+  locationPings      LocationPing[]
+  sharedGroups       SharedGroup[]
+}
+
+model AdminProfile {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @unique @db.Uuid
+  user       User      @relation(fields: [userId], references: [id])
+  name       String
+  role       AdminRole
+  totpSecret String? // encrypted
+  lastLoginAt DateTime? @db.Timestamptz(3)
+  lastLoginIp String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+}
+
+model DriverInvite {
+  id        String        @id @default(uuid()) @db.Uuid
+  driverId  String        @db.Uuid
+  driver    DriverProfile @relation(fields: [driverId], references: [id])
+  phone     String
+  codeHash  String
+  expiresAt DateTime      @db.Timestamptz(3)
+  usedAt    DateTime?     @db.Timestamptz(3)
+  revokedAt DateTime?     @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+model CarPartner {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String
+  brand            String
+  contact          Json?
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
+  vehicles         Vehicle[]
+  usageStatements  UsageStatement[]
+}
+
+model Vehicle {
+  id          String              @id @default(uuid()) @db.Uuid
+  plate       String              @unique
+  brand       String
+  model       String
+  colour      String
+  class       VehicleClass
+  seats       Int
+  bagCapacity Int
+  powerType   PowerType
+  partnerId   String?             @db.Uuid
+  partner     CarPartner?         @relation(fields: [partnerId], references: [id])
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
+  assignments VehicleAssignment[]
+  legs        RideLeg[]
+  sharedGroups SharedGroup[]
+}
+
+model VehicleAssignment {
+  id        String        @id @default(uuid()) @db.Uuid
+  vehicleId String        @db.Uuid
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
+  driverId  String        @db.Uuid
+  driver    DriverProfile @relation(fields: [driverId], references: [id])
+  from      DateTime      @db.Timestamptz(3)
+  to        DateTime?     @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+model Document {
+  id         String    @id @default(uuid()) @db.Uuid
+  ownerType  String // DRIVER | VEHICLE
+  ownerId    String    @db.Uuid
+  type       String // LICENCE | NIN | INSURANCE | ROADWORTHINESS ...
+  storageKey String
+  expiresAt  DateTime? @db.Timestamptz(3)
+  verifiedBy String?   @db.Uuid
+  verifiedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([ownerType, ownerId])
+}
+
+// ---------- bookings ----------
+
+model TransferBooking {
+  id                      String           @id @default(uuid()) @db.Uuid
+  airlineId               String?          @db.Uuid
+  airline                 Airline?         @relation(fields: [airlineId], references: [id])
+  channel                 BookingChannel
+  airlineBookingReference String
+  plan                    Plan             @default(STANDARD)
+  rideType                RideType         @default(PRIVATE)
+  status                  BookingStatus    @default(CONFIRMED)
+  policyRuleVersion       Int?
+  pricingRuleVersion      Int?
+  quoteId                 String?          @unique @db.Uuid
+  quote                   Quote?           @relation(fields: [quoteId], references: [id])
+  quoteSnapshot           Json?
+  collectedBy             CollectedBy
+  amountKobo              Int
+  airlineShareKobo        Int              @default(0)
+  passengers              Int
+  bags                    Int
+  flaggedForOps           Boolean          @default(false)
+  flagReason              String?
+  rawPayload              Json? // redacted partner payload, for debugging (8.6)
+  createdAt               DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime         @updatedAt @db.Timestamptz(3)
+  traveller               Traveller?
+  trackingToken           TrackingToken?
+  legs                    RideLeg[]
+  events                  BookingEvent[]
+  policyDecisions         PolicyDecision[]
+  refunds                 Refund[]
+  paymentIntents          PaymentIntent[]
+  ledgerEntries           LedgerEntry[]
+  replies                 TravellerReply[]
+
+  @@unique([airlineId, airlineBookingReference])
+  @@index([status])
+}
+
+model Traveller {
+  id        String          @id @default(uuid()) @db.Uuid
+  bookingId String          @unique @db.Uuid
+  booking   TransferBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  whatsapp  Boolean         @default(true)
+  email     String?
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([phone])
+}
+
+model TrackingToken {
+  id        String          @id @default(uuid()) @db.Uuid
+  bookingId String          @unique @db.Uuid
+  booking   TransferBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  tokenHash String          @unique
+  expiresAt DateTime        @db.Timestamptz(3)
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+/// One-time code for traveller change and cancel (ACC-02).
+model ChangeCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  bookingId String    @db.Uuid
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([bookingId])
+}
+
+model RideLeg {
+  id                 String          @id @default(uuid()) @db.Uuid
+  bookingId          String          @db.Uuid
+  booking            TransferBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type               LegType
+  rideType           RideType        @default(PRIVATE)
+  groupId            String?         @db.Uuid
+  group              SharedGroup?    @relation(fields: [groupId], references: [id])
+  stopNumber         Int?
+  pickupText         String
+  pickupLat          Float
+  pickupLng          Float
+  pickupLandmark     String?
+  dropoffText        String
+  dropoffLat         Float
+  dropoffLng         Float
+  dropoffLandmark    String?
+  pickupPointId      String?         @db.Uuid
+  flightId           String?         @db.Uuid
+  flight             FlightRecord?   @relation(fields: [flightId], references: [id])
+  scheduledAt        DateTime?       @db.Timestamptz(3)
+  nextActionAt       DateTime?       @db.Timestamptz(3) // DSP-05 sweeper
+  vehicleClass       VehicleClass    @default(SEDAN)
+  status             LegStatus       @default(SCHEDULED)
+  driverId           String?         @db.Uuid
+  driver             DriverProfile?  @relation(fields: [driverId], references: [id])
+  vehicleId          String?         @db.Uuid
+  vehicle            Vehicle?        @relation(fields: [vehicleId], references: [id])
+  pickupCodeHash     String
+  pickupCodeVersion  Int             @default(1) // bump to reissue a code
+  pickupCodeFailedAttempts Int       @default(0)
+  pickupCodeLockedAt DateTime?       @db.Timestamptz(3)
+  amountKobo         Int
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  offers             DispatchOffer[]
+  locationPings      LocationPing[]
+  callLogs           CallLog[]
+  refunds            Refund[]
+  earnings           DriverEarning[]
+  ratings            Rating[]
+  groupStop          GroupStop?
+  replies            TravellerReply[]
+
+  @@index([status, nextActionAt])
+  @@index([driverId])
+}
+
+/// Append-only.
+model BookingEvent {
+  id        String          @id @default(uuid()) @db.Uuid
+  bookingId String          @db.Uuid
+  booking   TransferBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type      String
+  actorRole ActorRole
+  actorId   String?
+  reason    String?
+  data      Json?
+  time      DateTime        @default(now()) @db.Timestamptz(3)
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([bookingId, time])
+}
+
+/// Idempotency keys for partner and payment calls (BKG-03).
+model IdempotencyRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  scope        String // e.g. airline id
+  key          String
+  requestHash  String
+  responseCode Int
+  responseBody Json
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([scope, key])
+}
+
+// ---------- flights ----------
+
+model FlightRecord {
+  id           String           @id @default(uuid()) @db.Uuid
+  flightNumber String
+  date         String // local date YYYY-MM-DD as published by the airline
+  airlineCode  String
+  origin       String
+  destination  String
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+  snapshots    FlightSnapshot[]
+  legs         RideLeg[]
+
+  @@unique([flightNumber, date])
+}
+
+/// Append-only.
+model FlightSnapshot {
+  id                 String       @id @default(uuid()) @db.Uuid
+  flightId           String       @db.Uuid
+  flight             FlightRecord @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  scheduledDeparture DateTime?    @db.Timestamptz(3)
+  scheduledArrival   DateTime?    @db.Timestamptz(3)
+  estimatedDeparture DateTime?    @db.Timestamptz(3)
+  estimatedArrival   DateTime?    @db.Timestamptz(3)
+  actualDeparture    DateTime?    @db.Timestamptz(3)
+  actualArrival      DateTime?    @db.Timestamptz(3)
+  status             FlightStatus
+  terminal           String?
+  source             FlightSource
+  confidence         Confidence
+  rawPayload         Json?
+  observedAt         DateTime     @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([flightId, observedAt])
+}
+
+// ---------- pricing and money ----------
+
+/// Immutable once locked.
+model Quote {
+  id         String           @id @default(uuid()) @db.Uuid
+  airlineId  String?          @db.Uuid
+  airline    Airline?         @relation(fields: [airlineId], references: [id])
+  request    Json
+  breakdown  Json
+  totalKobo  Int
+  marginKobo Int
+  flagged    Boolean          @default(false)
+  pricingRuleVersion Int
+  expiresAt  DateTime         @db.Timestamptz(3)
+  lockedAt   DateTime?        @db.Timestamptz(3)
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(3)
+  booking    TransferBooking?
+}
+
+model PaymentIntent {
+  id               String          @id @default(uuid()) @db.Uuid
+  bookingId        String          @db.Uuid
+  booking          TransferBooking @relation(fields: [bookingId], references: [id])
+  gateway          String          @default("paystack")
+  gatewayReference String          @unique
+  amountKobo       Int
+  status           PaymentStatus   @default(PENDING)
+  idempotencyKey   String          @unique
+  rawPayload       Json?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+model SettlementStatement {
+  id          String           @id @default(uuid()) @db.Uuid
+  airlineId   String           @db.Uuid
+  airline     Airline          @relation(fields: [airlineId], references: [id])
+  periodStart DateTime         @db.Timestamptz(3)
+  periodEnd   DateTime         @db.Timestamptz(3)
+  lines       Json
+  adjustments Json
+  totalKobo   Int
+  status      SettlementStatus @default(DRAFT)
+  sentAt      DateTime?        @db.Timestamptz(3)
+  paidAt      DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([airlineId, periodStart])
+}
+
+model LedgerAccount {
+  id        String            @id @default(uuid()) @db.Uuid
+  code      String            @unique // e.g. airline_receivable:<airlineId>
+  name      String
+  type      LedgerAccountType
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
+  entries   LedgerEntry[]
+}
+
+/// Double-entry: every transactionId must balance (sum of debits = sum of credits). Append-only.
+model LedgerEntry {
+  id            String           @id @default(uuid()) @db.Uuid
+  transactionId String           @db.Uuid
+  accountId     String           @db.Uuid
+  account       LedgerAccount    @relation(fields: [accountId], references: [id])
+  bookingId     String?          @db.Uuid
+  booking       TransferBooking? @relation(fields: [bookingId], references: [id])
+  amountKobo    BigInt
+  direction     LedgerDirection
+  reference     String
+  memo          String?
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([transactionId])
+  @@index([accountId])
+}
+
+model Refund {
+  id         String          @id @default(uuid()) @db.Uuid
+  bookingId  String          @db.Uuid
+  booking    TransferBooking @relation(fields: [bookingId], references: [id])
+  legId      String?         @db.Uuid
+  leg        RideLeg?        @relation(fields: [legId], references: [id])
+  amountKobo Int
+  route      RefundRoute
+  status     RefundStatus    @default(REQUESTED)
+  reason     String
+  issuedById String?         @db.Uuid
+  createdAt  DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+model DriverEarning {
+  id         String        @id @default(uuid()) @db.Uuid
+  driverId   String        @db.Uuid
+  driver     DriverProfile @relation(fields: [driverId], references: [id])
+  legId      String?       @db.Uuid
+  leg        RideLeg?      @relation(fields: [legId], references: [id])
+  amountKobo Int
+  type       EarningType
+  payoutId   String?       @db.Uuid
+  payout     Payout?       @relation(fields: [payoutId], references: [id])
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+model Payout {
+  id               String          @id @default(uuid()) @db.Uuid
+  driverId         String          @db.Uuid
+  driver           DriverProfile   @relation(fields: [driverId], references: [id])
+  periodStart      DateTime        @db.Timestamptz(3)
+  periodEnd        DateTime        @db.Timestamptz(3)
+  amountKobo       Int
+  status           PayoutStatus    @default(PENDING)
+  approvedById     String?         @db.Uuid
+  gatewayReference String?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  earnings         DriverEarning[]
+}
+
+model UsageStatement {
+  id          String           @id @default(uuid()) @db.Uuid
+  partnerId   String           @db.Uuid
+  partner     CarPartner       @relation(fields: [partnerId], references: [id])
+  periodStart DateTime         @db.Timestamptz(3)
+  periodEnd   DateTime         @db.Timestamptz(3)
+  trips       Int
+  amountKobo  Int
+  status      SettlementStatus @default(DRAFT)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+}
+
+// ---------- rules (versioned, effective-dated) ----------
+
+model PricingRule {
+  id            String          @id @default(uuid()) @db.Uuid
+  type          PricingRuleType
+  key           String // e.g. zone code, surcharge name, plan name
+  values        Json
+  version       Int
+  effectiveFrom DateTime        @db.Timestamptz(3)
+  effectiveTo   DateTime?       @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([type, key, effectiveFrom])
+}
+
+model PolicyRule {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String
+  conditions    Json
+  outcomes      Json
+  version       Int
+  effectiveFrom DateTime  @db.Timestamptz(3)
+  effectiveTo   DateTime? @db.Timestamptz(3)
+  createdById   String?   @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+}
+
+/// Append-only.
+model PolicyDecision {
+  id          String          @id @default(uuid()) @db.Uuid
+  bookingId   String          @db.Uuid
+  booking     TransferBooking @relation(fields: [bookingId], references: [id])
+  event       String
+  inputs      Json
+  output      Json
+  reasonCode  String
+  ruleVersion Int
+  overriddenById String?      @db.Uuid
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+/// Runtime configuration (buffers, cut-offs, timings). Every PRD "assumption" lives here, never in code.
+model ConfigEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String
+  value       Json
+  version     Int
+  description String?
+  updatedById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([key, version])
+}
+
+// ---------- dispatch ----------
+
+model DispatchPlan {
+  id            String             @id @default(uuid()) @db.Uuid
+  date          String // service date YYYY-MM-DD, Africa/Lagos
+  legs          Json // proposed [{legId, driverId, standby}]
+  status        DispatchPlanStatus @default(PROPOSED)
+  confirmedById String?            @db.Uuid
+  confirmedAt   DateTime?          @db.Timestamptz(3)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@unique([date])
+}
+
+model DispatchOffer {
+  id        String        @id @default(uuid()) @db.Uuid
+  legId     String        @db.Uuid
+  leg       RideLeg       @relation(fields: [legId], references: [id])
+  driverId  String        @db.Uuid
+  driver    DriverProfile @relation(fields: [driverId], references: [id])
+  sentAt    DateTime      @db.Timestamptz(3)
+  expiresAt DateTime      @db.Timestamptz(3)
+  response  OfferResponse @default(PENDING)
+  respondedAt DateTime?   @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([legId])
+}
+
+/// Trail in Postgres, latest position in Redis.
+model LocationPing {
+  id        String        @id @default(uuid()) @db.Uuid
+  driverId  String        @db.Uuid
+  driver    DriverProfile @relation(fields: [driverId], references: [id])
+  legId     String?       @db.Uuid
+  leg       RideLeg?      @relation(fields: [legId], references: [id])
+  lat       Float
+  lng       Float
+  accuracyM Float?
+  time      DateTime      @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([driverId, time])
+}
+
+model CallLog {
+  id               String    @id @default(uuid()) @db.Uuid
+  legId            String    @db.Uuid
+  leg              RideLeg   @relation(fields: [legId], references: [id])
+  fromRole         ActorRole
+  toRole           ActorRole
+  time             DateTime  @db.Timestamptz(3)
+  durationSeconds  Int?
+  outcome          String
+  providerReference String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+}
+
+// ---------- messaging and support ----------
+
+model Notification {
+  id                String              @id @default(uuid()) @db.Uuid
+  recipient         String // phone, email, push token or chat channel
+  recipientRole     ActorRole
+  bookingId         String?             @db.Uuid
+  template          String
+  channel           NotificationChannel
+  status            NotificationStatus  @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  time              DateTime            @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@index([bookingId])
+}
+
+model TravellerReply {
+  id               String              @id @default(uuid()) @db.Uuid
+  bookingId        String              @db.Uuid
+  booking          TransferBooking     @relation(fields: [bookingId], references: [id])
+  legId            String?             @db.Uuid
+  leg              RideLeg?            @relation(fields: [legId], references: [id])
+  channel          NotificationChannel
+  buttonOrText     String
+  mappedIntent     String?
+  providerMessageId String?            @unique // idempotency for inbound webhooks (TRV-13)
+  time             DateTime            @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+}
+
+model SupportNote {
+  id          String   @id @default(uuid()) @db.Uuid
+  subjectType String // BOOKING | DRIVER | TRAVELLER_PHONE
+  subjectId   String
+  authorId    String   @db.Uuid
+  text        String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([subjectType, subjectId])
+}
+
+model Rating {
+  id        String   @id @default(uuid()) @db.Uuid
+  legId     String   @db.Uuid
+  leg       RideLeg  @relation(fields: [legId], references: [id])
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+/// Append-only. Every admin write (PRD 2.2).
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?
+  actorRole ActorRole
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  time      DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([entity, entityId])
+}
+
+// ---------- airports, corridors, shared rides ----------
+
+model Airport {
+  id           String        @id @default(uuid()) @db.Uuid
+  iata         String
+  name         String
+  terminal     String // e.g. "MMA2", "Domestic GAT"
+  lat          Float
+  lng          Float
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  pickupPoints PickupPoint[]
+  corridors    Corridor[]
+  zones        Zone[]
+
+  @@unique([iata, terminal])
+}
+
+model PickupPoint {
+  id          String          @id @default(uuid()) @db.Uuid
+  airportId   String          @db.Uuid
+  airport     Airport         @relation(fields: [airportId], references: [id])
+  type        PickupPointType
+  name        String
+  lat         Float
+  lng         Float
+  directions  String?
+  activeHours Json?
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+}
+
+/// Pricing zone (area). Fares live in PricingRule(ZONE_FARE, key = zone.code).
+model Zone {
+  id          String   @id @default(uuid()) @db.Uuid
+  airportId   String   @db.Uuid
+  airport     Airport  @relation(fields: [airportId], references: [id])
+  code        String   @unique
+  name        String
+  centerLat   Float
+  centerLng   Float
+  polygon     Json? // GeoJSON polygon; ops draws the real boundary
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  corridorAreas CorridorArea[]
+}
+
+model Corridor {
+  id         String         @id @default(uuid()) @db.Uuid
+  airportId  String         @db.Uuid
+  airport    Airport        @relation(fields: [airportId], references: [id])
+  name       String
+  direction  Direction?     // null = both directions
+  sharedOn   Boolean        @default(true)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
+  areas      CorridorArea[]
+  groups     SharedGroup[]
+
+  @@unique([airportId, name])
+}
+
+model CorridorArea {
+  id         String   @id @default(uuid()) @db.Uuid
+  corridorId String   @db.Uuid
+  corridor   Corridor @relation(fields: [corridorId], references: [id], onDelete: Cascade)
+  zoneId     String   @db.Uuid
+  zone       Zone     @relation(fields: [zoneId], references: [id])
+  order      Int // 1 = farthest from the airport
+  polygon    Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([corridorId, order])
+}
+
+model SharedGroup {
+  id         String            @id @default(uuid()) @db.Uuid
+  airportIata String
+  terminal   String
+  direction  Direction
+  date       String
+  corridorId String            @db.Uuid
+  corridor   Corridor          @relation(fields: [corridorId], references: [id])
+  flightNumber String? // arrivals: one flight per group
+  status     SharedGroupStatus @default(OPEN)
+  route      Json?
+  driverId   String?           @db.Uuid
+  driver     DriverProfile?    @relation(fields: [driverId], references: [id])
+  vehicleId  String?           @db.Uuid
+  vehicle    Vehicle?          @relation(fields: [vehicleId], references: [id])
+  lockedAt   DateTime?         @db.Timestamptz(3)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+  legs       RideLeg[]
+  stops      GroupStop[]
+}
+
+model GroupStop {
+  id           String      @id @default(uuid()) @db.Uuid
+  groupId      String      @db.Uuid
+  group        SharedGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  legId        String      @unique @db.Uuid
+  leg          RideLeg     @relation(fields: [legId], references: [id])
+  order        Int
+  plannedTime  DateTime    @db.Timestamptz(3)
+  extraMinutes Int
+  actualTime   DateTime?   @db.Timestamptz(3)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+}
+
+model TravelTime {
+  id          String   @id @default(uuid()) @db.Uuid
+  fromZone    String
+  toZone      String
+  hourOfDay   Int
+  minutes     Int
+  refreshedAt DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([fromZone, toZone, hourOfDay])
+}

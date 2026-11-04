@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@airwheels/ui/theme.css';
+
+body {
+  @apply bg-cloud text-ink font-sans antialiased;
+}

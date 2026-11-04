@@ -1,0 +1,15 @@
+# Maestro flow for the driver app. Run on an emulator or device with:
+#   pnpm --filter @airwheels/driver test:maestro
+# Install Maestro first: https://maestro.mobile.dev
+appId: host.exp.Exponent # Expo Go. Use ng.airwheels.driver for a dev build.
+---
+- launchApp
+- assertVisible: "Driver app. Invite only."
+- tapOn:
+    id: "activate"
+- tapOn:
+    id: "invite-code"
+- inputText: "123456"
+- tapOn:
+    id: "activate-submit"
+- assertVisible: "You are off duty"

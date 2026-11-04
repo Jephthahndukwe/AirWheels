@@ -1,0 +1,40 @@
+{
+  "name": "@airwheels/driver",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "lint": "eslint app src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:maestro": "maestro test .maestro"
+  },
+  "dependencies": {
+    "@airwheels/types": "workspace:*",
+    "@airwheels/ui": "workspace:*",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@sentry/react-native": "~8.28.0",
+    "expo": "^58.0.22",
+    "expo-constants": "~58.0.14",
+    "expo-font": "~58.0.11",
+    "expo-linking": "~58.0.15",
+    "expo-location": "~58.0.20",
+    "expo-router": "~58.0.29",
+    "expo-secure-store": "~58.0.2",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-web": "^0.21.4"
+  },
+  "devDependencies": {
+    "@airwheels/config": "workspace:*",
+    "@types/react": "^19.3.0",
+    "typescript": "~5.9.3"
+  }
+}
