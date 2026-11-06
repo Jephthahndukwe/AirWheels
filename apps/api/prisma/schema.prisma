@@ -220,6 +220,15 @@ enum PricingRuleType {
   SHARED_SHARE
   MARGIN_FLOOR
   REVENUE_SHARE
+  TAX
+  ROUNDING
+  COST_MODEL
+}
+
+enum BookingStepStatus {
+  RUNNING
+  DONE
+  FAILED
 }
 
 enum DispatchPlanStatus {
@@ -517,6 +526,7 @@ model TransferBooking {
   airlineShareKobo        Int              @default(0)
   passengers              Int
   bags                    Int
+  payTokenHash            String? // our channel: lets the traveller pay and see status without an account
   flaggedForOps           Boolean          @default(false)
   flagReason              String?
   rawPayload              Json? // redacted partner payload, for debugging (8.6)
@@ -531,6 +541,7 @@ model TransferBooking {
   paymentIntents          PaymentIntent[]
   ledgerEntries           LedgerEntry[]
   replies                 TravellerReply[]
+  steps                   BookingStep[]
 
   @@unique([airlineId, airlineBookingReference])
   @@index([status])
@@ -555,6 +566,8 @@ model TrackingToken {
   bookingId String          @unique @db.Uuid
   booking   TransferBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   tokenHash String          @unique
+  /// The link is sent after payment by a queued step, so the token is also kept, encrypted.
+  tokenEncrypted String?
   expiresAt DateTime        @db.Timestamptz(3)
   createdAt DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt DateTime        @updatedAt @db.Timestamptz(3)
@@ -706,6 +719,7 @@ model Quote {
   marginKobo Int
   flagged    Boolean          @default(false)
   pricingRuleVersion Int
+  channel    BookingChannel   @default(WIDGET)
   expiresAt  DateTime         @db.Timestamptz(3)
   lockedAt   DateTime?        @db.Timestamptz(3)
   createdAt  DateTime         @default(now()) @db.Timestamptz(3)
@@ -722,7 +736,11 @@ model PaymentIntent {
   amountKobo       Int
   status           PaymentStatus   @default(PENDING)
   idempotencyKey   String          @unique
-  rawPayload       Json?
+  authorizationUrl String?
+  gatewayFeeKobo   Int?
+  paidAt           DateTime?       @db.Timestamptz(3)
+  failureReason    String?
+  rawPayload       Json? // redacted: never card or payer details
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
 }
@@ -756,9 +774,22 @@ model LedgerAccount {
 }
 
 /// Double-entry: every transactionId must balance (sum of debits = sum of credits). Append-only.
+/// One balanced posting. `reference` is unique, so posting the same event twice is a no-op.
+model LedgerTransaction {
+  id        String          @id @default(uuid()) @db.Uuid
+  reference String          @unique // e.g. payment:<intentId>, refund:<refundId>
+  kind      String
+  bookingId String?         @db.Uuid
+  memo      String?
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+  entries   LedgerEntry[]
+}
+
 model LedgerEntry {
   id            String           @id @default(uuid()) @db.Uuid
   transactionId String           @db.Uuid
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
   accountId     String           @db.Uuid
   account       LedgerAccount    @relation(fields: [accountId], references: [id])
   bookingId     String?          @db.Uuid
@@ -785,6 +816,9 @@ model Refund {
   status     RefundStatus    @default(REQUESTED)
   reason     String
   issuedById String?         @db.Uuid
+  issuedByRole String?
+  gatewayRefundId String?    @unique
+  completedAt DateTime?      @db.Timestamptz(3)
   createdAt  DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime        @updatedAt @db.Timestamptz(3)
 }
@@ -1250,4 +1284,53 @@ model TravelTime {
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([fromZone, toZone, hourOfDay])
+}
+
+// ---------- booking process and payments (M2) ----------
+
+/// One row per booking step (PRD 8.6): each step runs once, records its result, and is safe to retry.
+model BookingStep {
+  id          String            @id @default(uuid()) @db.Uuid
+  bookingId   String            @db.Uuid
+  booking     TransferBooking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  step        String // confirm_payment | post_ledger | notify_confirmed ...
+  status      BookingStepStatus @default(RUNNING)
+  attempts    Int               @default(0)
+  result      Json?
+  error       String?
+  completedAt DateTime?         @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@unique([bookingId, step])
+}
+
+/// Every payment webhook received, deduplicated by the gateway event identity (PAY-02). Append-only.
+model PaymentWebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  gateway     String
+  eventKey    String    @unique // event + reference + status
+  event       String
+  reference   String?
+  payload     Json // redacted
+  processedAt DateTime? @db.Timestamptz(3)
+  result      String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([reference])
+}
+
+/// Daily Paystack reconciliation (PAY-06).
+model ReconciliationRun {
+  id            String    @id @default(uuid()) @db.Uuid
+  day           String // YYYY-MM-DD, Africa/Lagos
+  trigger       String // schedule | ops | system
+  checked       Int       @default(0)
+  settled       Int       @default(0)
+  failed        Int       @default(0)
+  mismatches    Json
+  finishedAt    DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
 }

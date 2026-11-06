@@ -24,4 +24,10 @@ export const CONFIG = {
   otp: 'auth.otp',
   credentialRotationGraceHours: 'airlines.credentialRotationGraceHours',
   rateLimits: 'rateLimits',
+  ownChannelQuoteExpiryMinutes: 'pricing.ownChannelQuoteExpiryMinutes',
+  refundOpsAgentLimitKobo: 'refunds.opsAgentLimitKobo',
+  paymentPendingCheckMinutes: 'payments.pendingCheckAfterMinutes',
+  paymentAbandonAfterHours: 'payments.abandonAfterHours',
+  reconciliationHour: 'payments.reconciliationHourLagos',
+  stuckBookingMinutes: 'bookings.stuckAfterMinutes',
 } as const;

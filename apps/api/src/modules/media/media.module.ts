@@ -23,6 +23,7 @@ import { STORAGE, type StorageAdapter } from '../../adapters/interfaces';
 import { checkStorageSignature, localStoragePath } from '../../adapters/fakes';
 import { PrismaService } from '../../common/prisma.service';
 import { Public } from '../../common/auth/roles';
+import { fakeProvidersAllowed } from '../../common/env';
 import { AuditService } from '../audit/audit.service';
 
 export const DOCUMENT_TYPES = ['LICENCE', 'ID', 'PHOTO', 'REFEREE', 'INSURANCE', 'ROADWORTHINESS', 'OTHER'] as const;
@@ -107,7 +108,8 @@ export class MediaService {
 @Controller({ path: 'fake-storage', version: '1' })
 export class FakeStorageController {
   private guard() {
-    if (process.env.NODE_ENV === 'production') throw new NotFoundException();
+    // Development shortcut (ACC-12): off everywhere except development and the test runner.
+    if (!fakeProvidersAllowed()) throw new NotFoundException();
   }
 
   @Put()

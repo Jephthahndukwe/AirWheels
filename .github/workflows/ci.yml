@@ -33,7 +33,7 @@ jobs:
           git diff --exit-code -- packages/api-client || (echo "Run 'pnpm openapi' and commit the result." && exit 1)
 
   smoke:
-    name: Mock airline booking and M1 identity flow (Postgres + Redis)
+    name: Mock airline booking, M1 identity and M2 money flows (Postgres + Redis)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -67,6 +67,8 @@ jobs:
       - run: pnpm --filter @airwheels/mock-airline smoke
       - name: M1 flow (super admin, ops agent, driver activation, suspension, audit)
         run: pnpm --filter @airwheels/api flow:m1
+      - name: M2 flow (quote, book, pay, webhooks, expired quote, refunds, ledger)
+        run: pnpm --filter @airwheels/api flow:m2
       - if: failure()
         run: cat api.log
 

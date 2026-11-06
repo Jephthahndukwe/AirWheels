@@ -1,4 +1,6 @@
 import { Global, Logger, Module, type Provider } from '@nestjs/common';
+import { fakeProvidersAllowedEnv } from '../common/env';
+import { PaystackPayments } from './paystack';
 import {
   FakeEmail,
   FakeFlightStatus,
@@ -25,11 +27,21 @@ import {
 } from './interfaces';
 
 /**
- * Binds each adapter token to an implementation.
- * Only fakes exist in this milestone. When ADAPTERS_MODE=live, each live adapter is added
- * to `live` below and selected only if its env keys are present; otherwise the fake is used.
+ * Binds each adapter token to an implementation (PRD 21).
+ *
+ * ADAPTERS_MODE=live picks the live adapter for each provider whose keys are set. Fakes are a
+ * development shortcut (ACC-12): they are allowed only in development and in the test runner.
+ * Anywhere else (staging, production, or NODE_ENV unset) the API refuses to start rather than
+ * quietly faking SMS, payments or KYC.
  */
-const bindings: { token: symbol; name: string; fake: new () => object; requiredEnv: string[] }[] = [
+export interface AdapterBinding {
+  token: symbol;
+  name: string;
+  fake: new () => object;
+  requiredEnv: string[];
+}
+
+export const bindings: AdapterBinding[] = [
   { token: PAYMENTS, name: 'Paystack', fake: FakePayments, requiredEnv: ['PAYSTACK_SECRET_KEY'] },
   { token: WHATSAPP, name: 'WhatsApp Cloud API', fake: FakeWhatsApp, requiredEnv: ['WHATSAPP_ACCESS_TOKEN'] },
   { token: SMS, name: 'Termii', fake: FakeSms, requiredEnv: ['TERMII_API_KEY'] },
@@ -43,19 +55,32 @@ const bindings: { token: symbol; name: string; fake: new () => object; requiredE
 ];
 
 /** Live implementations register here as they are built (keyed by token). */
-const live = new Map<symbol, new () => object>();
+export const live = new Map<symbol, new () => object>([[PAYMENTS, PaystackPayments]]);
 
 const log = new Logger('Adapters');
 
-const providers: Provider[] = bindings.map(({ token, name, fake, requiredEnv }) => ({
-  provide: token,
+/** Pure choice of implementation, tested for every environment. */
+export function chooseAdapter(
+  b: AdapterBinding,
+  env: Record<string, string | undefined>,
+  liveImpls: Map<symbol, new () => object> = live,
+): { kind: 'live' | 'fake'; impl: new () => object } {
+  const Live = liveImpls.get(b.token);
+  const hasKeys = b.requiredEnv.every((k) => !!env[k]);
+  if (env.ADAPTERS_MODE === 'live' && Live && hasKeys) return { kind: 'live', impl: Live };
+  if (fakeProvidersAllowedEnv(env.NODE_ENV)) return { kind: 'fake', impl: b.fake };
+  throw new Error(
+    `${b.name}: no live adapter configured (set ADAPTERS_MODE=live and ${b.requiredEnv.join(', ')}). ` +
+      `Fake providers are only allowed when NODE_ENV is development or test, and it is "${env.NODE_ENV ?? 'unset'}".`,
+  );
+}
+
+const providers: Provider[] = bindings.map((b) => ({
+  provide: b.token,
   useFactory: () => {
-    const wantLive = process.env.ADAPTERS_MODE === 'live';
-    const hasKeys = requiredEnv.every((k) => !!process.env[k]);
-    const Live = live.get(token);
-    if (wantLive && hasKeys && Live) return new Live();
-    if (wantLive) log.warn(`${name}: live adapter unavailable (missing keys or not built), using fake`);
-    return new fake();
+    const choice = chooseAdapter(b, process.env);
+    if (choice.kind === 'fake' && process.env.ADAPTERS_MODE === 'live') log.warn(`${b.name}: live adapter unavailable, using fake`);
+    return new choice.impl();
   },
 }));
 

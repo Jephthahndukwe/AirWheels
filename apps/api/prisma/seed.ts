@@ -1,4 +1,4 @@
-import { PrismaClient, type VehicleClass } from '@prisma/client';
+import { PrismaClient, type PricingRuleType, type VehicleClass } from '@prisma/client';
 import { encrypt } from '../src/common/crypto';
 import { haversineKm } from '../src/adapters/fakes';
 import {
@@ -8,6 +8,7 @@ import {
   driverSeeds,
   pickupPoints,
   placeholderFareKobo,
+  pricingRuleSeeds,
 } from './seed-data';
 
 const prisma = new PrismaClient();
@@ -22,11 +23,23 @@ async function main() {
 
   // Config store
   for (const c of configDefaults) {
-    await prisma.configEntry.upsert({
-      where: { key_version: { key: c.key, version: 1 } },
-      update: {},
-      create: { key: c.key, value: c.value as object, version: 1, description: c.description },
-    });
+    const latest = await prisma.configEntry.findFirst({ where: { key: c.key }, orderBy: { version: 'desc' } });
+    if (!latest) {
+      await prisma.configEntry.create({ data: { key: c.key, value: c.value as object, version: 1, description: c.description } });
+      continue;
+    }
+    // Objects gain new fields from later milestones (for example new rate limit buckets) as a new
+    // version. Values ops already changed are kept.
+    const cur = latest.value as Record<string, unknown> | null;
+    const def = c.value as Record<string, unknown>;
+    if (cur && typeof cur === 'object' && !Array.isArray(cur) && def && typeof def === 'object' && !Array.isArray(def)) {
+      const missing = Object.keys(def).filter((k) => !(k in cur));
+      if (missing.length) {
+        await prisma.configEntry.create({
+          data: { key: c.key, value: { ...cur, ...Object.fromEntries(missing.map((k) => [k, def[k]])) } as object, version: latest.version + 1, description: c.description },
+        });
+      }
+    }
   }
 
   // Launch airline (mock)
@@ -40,7 +53,7 @@ async function main() {
       serviceBrandName: 'Mock Air Transfers',
       quoteExpiryMinutes: 30,
       revenueShareBps: 1000,
-      settlementTerms: { schedule: 'WEEKLY' },
+      settlementTerms: { schedule: 'WEEKLY', shareOnLinkBookings: true },
     },
   });
   const keyId = process.env.MOCK_AIRLINE_KEY_ID ?? 'mock-key-1';
@@ -95,11 +108,8 @@ async function main() {
     }
   }
 
-  // Plans, shared share, margin floor (PRD 12)
-  await upsertRule('PLAN', 'STANDARD', { multiplierBps: 10_000 });
-  await upsertRule('PLAN', 'FLEX', { multiplierBps: 11_500 });
-  await upsertRule('SHARED_SHARE', 'default', { bps: 6_000 });
-  await upsertRule('REVENUE_SHARE', code, { bps: 1_000 });
+  // Every pricing rule type (PRD 12.6). PLACEHOLDER VALUES: ops sets real ones in the admin.
+  for (const r of pricingRuleSeeds(code)) await upsertRule(r.type, r.key, r.values);
 
   // Car partners, vehicles, drivers
   const partners = new Map<string, string>();
@@ -160,7 +170,7 @@ async function main() {
   console.log('Seeded', counts);
 }
 
-async function upsertRule(type: 'ZONE_FARE' | 'PLAN' | 'SHARED_SHARE' | 'REVENUE_SHARE', key: string, values: object) {
+async function upsertRule(type: PricingRuleType, key: string, values: object) {
   const existing = await prisma.pricingRule.findFirst({ where: { type, key, version: 1 } });
   if (!existing) {
     await prisma.pricingRule.create({ data: { type, key, values, version: 1, effectiveFrom: EPOCH } });

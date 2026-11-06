@@ -41,7 +41,7 @@ export const SharedGroupStatus = z.enum([
   'COMPLETED',
   'DISSOLVED',
 ]);
-export const DriverStatus = z.enum(['INVITED', 'ACTIVATED', 'ACTIVE', 'SUSPENDED']);
+export const DriverStatus = z.enum(['ONBOARDING', 'INVITED', 'ACTIVATED', 'ACTIVE', 'SUSPENDED']);
 export const AdminRole = z.enum(['OPS_AGENT', 'SUPER_ADMIN', 'FINANCE']);
 export const FlightEventType = z.enum([
   'TIME_SHIFTED',

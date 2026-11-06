@@ -32,6 +32,8 @@ import { FlightsModule, FlightsService } from '../flights/flights.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { PricingService } from '../pricing/pricing.service';
 import { IdempotencyService } from './idempotency';
+import { OpsBookingsController, OwnBookingsController, OwnChannelService } from './own-channel';
+import { PaymentsModule } from '../payments/payments.module';
 
 /**
  * Partner API for airline systems (PRD 6, 20). Every channel funnels into BookingsService,
@@ -55,7 +57,7 @@ export class PartnerController {
   @Post('quotes')
   @ApiZodBody(PartnerQuoteRequest)
   quote(@Req() req: PartnerRequest, @Body(new ZodPipe(PartnerQuoteRequest)) body: PartnerQuoteRequest) {
-    return this.pricing.quote(body, req.airline);
+    return this.pricing.quotePartner(body, req.airline);
   }
 
   @Post('bookings')
@@ -130,8 +132,8 @@ export class PartnerController {
 }
 
 @Module({
-  imports: [AirlinesModule, BookingsModule, FlightsModule, PricingModule],
-  controllers: [PartnerController],
-  providers: [IdempotencyService],
+  imports: [AirlinesModule, BookingsModule, FlightsModule, PricingModule, PaymentsModule],
+  controllers: [PartnerController, OwnBookingsController, OpsBookingsController],
+  providers: [IdempotencyService, OwnChannelService],
 })
 export class IntakeModule {}

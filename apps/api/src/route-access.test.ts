@@ -18,6 +18,7 @@ import { ROLES, type AuthedRequest, type Principal, type Role } from './common/a
 process.env.REDIS_URL = 'redis://127.0.0.1:1'; // no Redis needed; queues are never used here
 process.env.JWT_SECRET ??= 'x'.repeat(64);
 process.env.LOG_LEVEL = 'silent';
+process.env.JOBS_ENABLED = 'false';
 
 type Who = Role | 'ANONYMOUS';
 const EVERYONE: Who[] = [...ROLES, 'ANONYMOUS'];
@@ -38,6 +39,10 @@ const POLICY: Group[] = [
   { name: 'public quotes (our booking page)', match: /^POST \/v1\/quotes$/, allowed: 'PUBLIC' },
   { name: 'tracking page (token-scoped)', match: /^GET \/v1\/t\/:token$/, allowed: 'PUBLIC' },
   { name: 'dev storage (signed URLs)', match: /^(GET|PUT) \/v1\/fake-storage$/, allowed: 'PUBLIC' },
+  { name: 'address search (booking page)', match: /^GET \/v1\/places\/(search|reverse)$/, allowed: 'PUBLIC' },
+  { name: 'our booking page: book, pay, status (pay token)', match: /^(POST \/v1\/bookings|POST \/v1\/bookings\/:id\/pay|GET \/v1\/bookings\/:id)$/, allowed: 'PUBLIC' },
+  { name: 'Paystack webhook (signature checked)', match: /^POST \/v1\/webhooks\/payments$/, allowed: 'PUBLIC' },
+  { name: 'fake checkout (development and tests only)', match: /^POST \/v1\/dev\/fake-paystack\/:reference\/complete$/, allowed: 'PUBLIC' },
   { name: 'admin sign-in doors', match: /^(POST \/v1\/admin\/auth\/login|GET \/v1\/admin\/auth\/invites\/:token|POST \/v1\/admin\/auth\/invites\/accept)$/, allowed: 'PUBLIC' },
   { name: 'admin own session', match: /^(GET|POST) \/v1\/admin\/auth\/(me|logins|logout)$/, allowed: STAFF },
   { name: 'driver sign-in doors', match: /^POST \/v1\/driver\/(activate\/(start|verify|complete)|login|login\/verify)$/, allowed: 'PUBLIC' },
@@ -47,9 +52,10 @@ const POLICY: Group[] = [
   { name: 'staff and roles', match: /^\w+ \/v1\/admin\/staff/, allowed: SUPER },
   { name: 'airline keys (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/airlines/, allowed: SUPER },
   { name: 'config store (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/config/, allowed: SUPER },
+  { name: 'pricing rules (write)', match: /^POST \/v1\/admin\/pricing\/rules/, allowed: SUPER },
   { name: 'driver reactivation', match: /^POST \/v1\/admin\/drivers\/:id\/reactivate$/, allowed: SUPER },
   { name: 'admin reads', match: /^GET \/v1\/admin\//, allowed: STAFF },
-  { name: 'admin operations (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/(drivers|documents|vehicles|legs|alerts)/, allowed: STAFF_WRITE },
+  { name: 'admin operations (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/(drivers|documents|vehicles|legs|alerts|bookings|payments|pricing\/simulate)/, allowed: STAFF_WRITE },
 ];
 
 const principalFor = (who: Who): Principal | null => {
@@ -90,6 +96,8 @@ beforeAll(async () => {
   const { PrincipalResolver } = await import('./modules/auth/principal.resolver');
   const { RateLimitService } = await import('./modules/auth/rate-limit.service');
   const { MessagingProcessor } = await import('./modules/messaging/messaging.module');
+  const { BookingsProcessor } = await import('./modules/bookings/bookings.module');
+  const { PaymentsProcessor } = await import('./modules/payments/payments.module');
   const { AuditService } = await import('./modules/audit/audit.service');
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -101,6 +109,10 @@ beforeAll(async () => {
     .overrideProvider(AuditService)
     .useValue({ record: async (e: { action: string }) => audited.push(e.action) })
     .overrideProvider(MessagingProcessor)
+    .useValue({})
+    .overrideProvider(BookingsProcessor)
+    .useValue({})
+    .overrideProvider(PaymentsProcessor)
     .useValue({})
     .compile();
 

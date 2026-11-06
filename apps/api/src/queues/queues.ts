@@ -4,6 +4,8 @@ import { Global, Module } from '@nestjs/common';
 /** BullMQ queues (PRD 4.1 workers). One queue per worker family. */
 export const QUEUES = {
   intake: 'intake',
+  bookings: 'bookings',
+  payments: 'payments',
   flights: 'flights',
   dispatch: 'dispatch',
   messaging: 'messaging',

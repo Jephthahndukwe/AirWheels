@@ -21,7 +21,8 @@ import { SessionsService } from './sessions.service';
 
 const GENERIC_FAIL = { code: 'INVALID_CREDENTIALS', message: 'Email, password or code is wrong.' };
 
-export const isDevelopment = () => process.env.NODE_ENV === 'development';
+export { isDevelopment } from '../../common/env';
+import { isDevelopment } from '../../common/env';
 const adminUrl = () => process.env.ADMIN_PUBLIC_URL ?? 'http://localhost:3001';
 const normaliseEmail = (e: string) => e.trim().toLowerCase();
 

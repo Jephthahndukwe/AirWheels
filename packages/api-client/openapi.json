@@ -2636,12 +2636,155 @@
         ]
       }
     },
-    "/v1/admin/bookings": {
-      "get": {
-        "operationId": "AdminBookingsController_list_v1",
+    "/v1/bookings": {
+      "post": {
+        "operationId": "OwnBookingsController_create_v1",
         "parameters": [
           {
-            "name": "limit",
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quoteId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "airlineBookingReference": {
+                    "allOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9]{5,12}$"
+                      }
+                    ]
+                  },
+                  "traveller": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 80
+                      },
+                      "phone": {
+                        "type": "string",
+                        "pattern": "^\\+[1-9]\\d{7,14}$"
+                      },
+                      "whatsapp": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "phone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "OWN_PAGE",
+                      "LINK"
+                    ],
+                    "default": "OWN_PAGE"
+                  }
+                },
+                "required": [
+                  "quoteId",
+                  "airlineBookingReference",
+                  "traveller"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/v1/bookings/{id}/pay": {
+      "post": {
+        "operationId": "OwnBookingsController_pay_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payToken": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "payToken"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/v1/bookings/{id}": {
+      "get": {
+        "operationId": "OwnBookingsController_status_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "t",
             "required": true,
             "in": "query",
             "schema": {
@@ -2655,13 +2798,13 @@
           }
         },
         "tags": [
-          "admin"
+          "bookings"
         ]
       }
     },
-    "/v1/quotes": {
+    "/v1/admin/bookings": {
       "post": {
-        "operationId": "QuotesController_create_v1",
+        "operationId": "OpsBookingsController_create_v1",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -2670,6 +2813,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "airlineCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 3
+                  },
                   "legs": {
                     "type": "array",
                     "items": {
@@ -2682,131 +2830,65 @@
                             "ARRIVAL"
                           ]
                         },
-                        "pickup": {
-                          "type": "object",
-                          "properties": {
-                            "text": {
-                              "type": "string",
-                              "minLength": 3
+                        "flightNumber": {
+                          "allOf": [
+                            {
+                              "type": "string"
                             },
-                            "location": {
-                              "type": "object",
-                              "properties": {
-                                "lat": {
-                                  "type": "number",
-                                  "minimum": -90,
-                                  "maximum": 90
-                                },
-                                "lng": {
-                                  "type": "number",
-                                  "minimum": -180,
-                                  "maximum": 180
-                                }
-                              },
-                              "required": [
-                                "lat",
-                                "lng"
-                              ],
-                              "additionalProperties": false
-                            },
-                            "landmark": {
-                              "type": "string",
-                              "maxLength": 200
-                            }
-                          },
-                          "required": [
-                            "text",
-                            "location"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "dropoff": {
-                          "type": "object",
-                          "properties": {
-                            "text": {
-                              "type": "string",
-                              "minLength": 3
-                            },
-                            "location": {
-                              "type": "object",
-                              "properties": {
-                                "lat": {
-                                  "type": "number",
-                                  "minimum": -90,
-                                  "maximum": 90
-                                },
-                                "lng": {
-                                  "type": "number",
-                                  "minimum": -180,
-                                  "maximum": 180
-                                }
-                              },
-                              "required": [
-                                "lat",
-                                "lng"
-                              ],
-                              "additionalProperties": false
-                            },
-                            "landmark": {
-                              "type": "string",
-                              "maxLength": 200
-                            }
-                          },
-                          "required": [
-                            "text",
-                            "location"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "flight": {
-                          "type": "object",
-                          "properties": {
-                            "flightNumber": {
+                            {
                               "type": "string",
                               "pattern": "^[A-Z0-9]{2}\\d{1,4}$"
-                            },
-                            "date": {
+                            }
+                          ]
+                        },
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "address": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
                               "type": "string",
-                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                              "minLength": 3
                             },
-                            "origin": {
+                            "location": {
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "type": "number",
+                                  "minimum": -90,
+                                  "maximum": 90
+                                },
+                                "lng": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                }
+                              },
+                              "required": [
+                                "lat",
+                                "lng"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "landmark": {
                               "type": "string",
-                              "minLength": 3,
-                              "maxLength": 3
-                            },
-                            "destination": {
-                              "type": "string",
-                              "minLength": 3,
-                              "maxLength": 3
-                            },
-                            "scheduledDeparture": {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            "scheduledArrival": {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            "terminal": {
-                              "type": "string"
+                              "maxLength": 200
                             }
                           },
                           "required": [
-                            "flightNumber",
-                            "date",
-                            "origin",
-                            "destination",
-                            "scheduledDeparture",
-                            "scheduledArrival"
+                            "text",
+                            "location"
                           ],
                           "additionalProperties": false
                         }
                       },
                       "required": [
                         "type",
-                        "pickup",
-                        "dropoff",
-                        "flight"
+                        "flightNumber",
+                        "date",
+                        "address"
                       ],
                       "additionalProperties": false
                     },
@@ -2816,7 +2898,7 @@
                   "passengers": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 8
+                    "maximum": 7
                   },
                   "bags": {
                     "type": "integer",
@@ -2846,6 +2928,391 @@
                       "FLEX"
                     ],
                     "default": "STANDARD"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "childSeats": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      },
+                      "extraStops": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {
+                      "childSeats": 0,
+                      "extraStops": 0
+                    }
+                  },
+                  "promoCode": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "airlineBookingReference": {
+                    "allOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9]{5,12}$"
+                      }
+                    ]
+                  },
+                  "traveller": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 80
+                      },
+                      "phone": {
+                        "type": "string",
+                        "pattern": "^\\+[1-9]\\d{7,14}$"
+                      },
+                      "whatsapp": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "phone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "legs",
+                  "passengers",
+                  "bags",
+                  "airlineBookingReference",
+                  "traveller"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "operationId": "AdminBookingsController_list_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bookings/stuck": {
+      "get": {
+        "operationId": "AdminBookingsController_stuck_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bookings/{id}": {
+      "get": {
+        "operationId": "AdminBookingsController_detail_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bookings/{id}/retry": {
+      "post": {
+        "operationId": "AdminBookingsController_retry_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bookings/{id}/cancel": {
+      "post": {
+        "operationId": "AdminBookingsController_cancel_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/quotes": {
+      "post": {
+        "operationId": "QuotesController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "airlineCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 3
+                  },
+                  "legs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "DEPARTURE",
+                            "ARRIVAL"
+                          ]
+                        },
+                        "flightNumber": {
+                          "allOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z0-9]{2}\\d{1,4}$"
+                            }
+                          ]
+                        },
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "address": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 3
+                            },
+                            "location": {
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "type": "number",
+                                  "minimum": -90,
+                                  "maximum": 90
+                                },
+                                "lng": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                }
+                              },
+                              "required": [
+                                "lat",
+                                "lng"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "landmark": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "location"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "flightNumber",
+                        "date",
+                        "address"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 2
+                  },
+                  "passengers": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "bags": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 12
+                  },
+                  "rideType": {
+                    "type": "string",
+                    "enum": [
+                      "PRIVATE",
+                      "SHARED"
+                    ],
+                    "default": "PRIVATE"
+                  },
+                  "vehicleClass": {
+                    "type": "string",
+                    "enum": [
+                      "SEDAN",
+                      "SUV",
+                      "VAN"
+                    ]
+                  },
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "STANDARD",
+                      "FLEX"
+                    ],
+                    "default": "STANDARD"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "childSeats": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      },
+                      "extraStops": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {
+                      "childSeats": 0,
+                      "extraStops": 0
+                    }
+                  },
+                  "promoCode": {
+                    "type": "string",
+                    "maxLength": 20
                   }
                 },
                 "required": [
@@ -2865,6 +3332,358 @@
         },
         "tags": [
           "quotes"
+        ]
+      }
+    },
+    "/v1/places/search": {
+      "get": {
+        "operationId": "PlacesController_search_v1",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
+    "/v1/places/reverse": {
+      "get": {
+        "operationId": "PlacesController_reverse_v1",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
+    "/v1/admin/pricing/rules": {
+      "get": {
+        "operationId": "AdminPricingController_rules_v1",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminPricingController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ZONE_FARE",
+                      "CEILING",
+                      "FEE",
+                      "SURCHARGE",
+                      "VEHICLE_CLASS",
+                      "PLAN",
+                      "SHARED_SHARE",
+                      "DISCOUNT",
+                      "TAX",
+                      "ROUNDING",
+                      "COST_MODEL",
+                      "MARGIN_FLOOR",
+                      "REVENUE_SHARE"
+                    ]
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "values": {},
+                  "effectiveFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "effectiveTo": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "type",
+                  "key"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/pricing/rules/{id}/end": {
+      "post": {
+        "operationId": "AdminPricingController_end_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "effectiveTo": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/pricing/simulate": {
+      "post": {
+        "operationId": "AdminPricingController_simulate_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "airlineCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 3
+                  },
+                  "legs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "DEPARTURE",
+                            "ARRIVAL"
+                          ]
+                        },
+                        "flightNumber": {
+                          "allOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[A-Z0-9]{2}\\d{1,4}$"
+                            }
+                          ]
+                        },
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "address": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 3
+                            },
+                            "location": {
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "type": "number",
+                                  "minimum": -90,
+                                  "maximum": 90
+                                },
+                                "lng": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                }
+                              },
+                              "required": [
+                                "lat",
+                                "lng"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "landmark": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "location"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "flightNumber",
+                        "date",
+                        "address"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 2
+                  },
+                  "passengers": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "bags": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 12
+                  },
+                  "rideType": {
+                    "type": "string",
+                    "enum": [
+                      "PRIVATE",
+                      "SHARED"
+                    ],
+                    "default": "PRIVATE"
+                  },
+                  "vehicleClass": {
+                    "type": "string",
+                    "enum": [
+                      "SEDAN",
+                      "SUV",
+                      "VAN"
+                    ]
+                  },
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "STANDARD",
+                      "FLEX"
+                    ],
+                    "default": "STANDARD"
+                  },
+                  "extras": {
+                    "type": "object",
+                    "properties": {
+                      "childSeats": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      },
+                      "extraStops": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "default": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {
+                      "childSeats": 0,
+                      "extraStops": 0
+                    }
+                  },
+                  "promoCode": {
+                    "type": "string",
+                    "maxLength": 20
+                  }
+                },
+                "required": [
+                  "legs",
+                  "passengers",
+                  "bags"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -2954,6 +3773,171 @@
         },
         "tags": [
           "driver"
+        ]
+      }
+    },
+    "/v1/webhooks/payments": {
+      "post": {
+        "operationId": "PaymentWebhookController_receive_v1",
+        "parameters": [
+          {
+            "name": "x-paystack-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/admin/bookings/{id}/refunds": {
+      "post": {
+        "operationId": "AdminPaymentsController_refund_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountKobo": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  },
+                  "legId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "amountKobo",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bookings/{id}/refundable": {
+      "get": {
+        "operationId": "AdminPaymentsController_refundable_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/payments": {
+      "get": {
+        "operationId": "AdminPaymentsController_list_v1",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/payments/reconcile": {
+      "post": {
+        "operationId": "AdminPaymentsController_reconcile_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/ledger/balances": {
+      "get": {
+        "operationId": "AdminPaymentsController_balances_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/system/payments/reconcile": {
+      "post": {
+        "operationId": "SystemPaymentsController_reconcile_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "system"
         ]
       }
     },

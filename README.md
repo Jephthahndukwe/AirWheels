@@ -1,7 +1,7 @@
 # Airwheels
 
 Door-to-door airport transfers sold inside airline booking flows. Lagos first.
-The source of truth is **PRD v2.3** (November 4, 2026). Section numbers in code comments (e.g. `PRD 10.1`, `CHN-03`) point to it.
+The source of truth is **PRD v2.4** (November 6, 2026). Section numbers in code comments (e.g. `PRD 10.1`, `CHN-03`) point to it.
 
 ## Setup (about 5 minutes)
 
@@ -155,10 +155,36 @@ To rotate a single airline's **signing secret** (not the encryption key), issue 
 - **Rate limits** (Redis, per IP or per airline key) and every timeout, lockout and expiry live in the config store, editable by super admins at **Settings**.
 - **System jobs** call internal routes with `SYSTEM_API_TOKEN`.
 
+## Money (M2)
+
+- **Quotes** follow PRD 12.2 step by step in a pure engine (`apps/api/src/modules/pricing/engine.ts`): zone base fare, airport fee (passed through), time and season surcharges, vehicle class and extra bags, extras, plan multiplier, shared share, discounts with stacking limits, tax and rounding. A cost model runs alongside; the margin floor wins over the price ceiling and flags the quote for ops.
+- **Pricing rules** are versioned and effective-dated (`PricingRule`). Super admins add versions at **Pricing**; nothing is edited in place and every change is in the audit log. Each quote stores the rule versions it used.
+- **Quotes are snapshots**: a Postgres trigger refuses any change except setting `lockedAt` once. The price is held for the airline's quote expiry, or `pricing.ownChannelQuoteExpiryMinutes` on our own channel. An expired quote cannot be booked or paid.
+- **Bookings** have the states of PRD 8.4; moves PRD 8.4 does not allow are refused. Every change writes a `BookingEvent`. After confirmation, the ledger posting and the confirmation message run as queued steps that each run once (`BookingStep`), and a sweeper re-queues anything the queue missed.
+- **Channels**: airline partner API, our booking page (`/`), the post-booking link (`/?airline=P4&ref=ABC123&flight=P47121&date=2026-11-20&leg=DEPARTURE`) and ops entry (**Bookings → New phone or WhatsApp booking**) all go through the same booking service.
+- **Paystack**: the real adapter (`apps/api/src/adapters/paystack.ts`) is used when `ADAPTERS_MODE=live` and `PAYSTACK_SECRET_KEY` is set (test key `sk_test_...` for test mode). Locally and in CI a fake gateway sends you to a test checkout page and signs its webhooks exactly like Paystack. Webhooks are signature-checked, stored once per event, and applied only after asking Paystack for the transaction, so duplicates and out-of-order events change nothing. Payment details are never logged or stored.
+- **Ledger**: double-entry in integer kobo with every PRD 14.4 account, plus per-airline receivable and revenue share accounts. Postings are refused unless they balance, and a deferred Postgres trigger refuses an unbalanced transaction at commit. Ledger rows cannot be edited or deleted.
+- **Refunds** go back through Paystack for our channel, or onto the airline's statement for airline-collected bookings. Ops agents are capped at `refunds.opsAgentLimitKobo`; larger refunds need a super admin.
+- **Reconciliation** runs daily (`payments.reconciliationHourLagos`) and on demand at **Payments**: it settles payments still pending, compares the day with Paystack, checks the ledger balances, and alerts ops about any mismatch.
+- Check the whole path: `pnpm --filter @airwheels/api flow:m2` (after `flow:m1`).
+
+### Paystack test mode
+
+Add your test keys to `.env` and switch the adapter on:
+
+```
+ADAPTERS_MODE=live
+PAYSTACK_SECRET_KEY=sk_test_...
+PAYSTACK_PUBLIC_KEY=pk_test_...
+```
+
+Point the Paystack dashboard's test webhook URL at `https://<your tunnel>/v1/webhooks/payments`. Without a webhook (for example on localhost), reconciliation settles the payment within `payments.pendingCheckAfterMinutes`, or run it from **Payments**. Note that with `ADAPTERS_MODE=live` every other provider without a live adapter still uses its fake, which is only allowed in development.
+
 ## Notes and decisions
 
 - **Airline signing secrets** are stored AES-256-GCM encrypted, not hashed (PRD 18 says "secret hash"), because verifying an HMAC signature needs the secret itself.
 - **Pickup codes** are derived from the leg id and the leg's code version with `PICKUP_CODE_KEY`, so the tracking page can show them again while only a hash is stored (PRD 19.1). Ops reissue a code with `POST /v1/admin/legs/:id/pickup-code/reissue`, which bumps the version so the old code stops working. After `dispatch.pickupCodeMaxAttempts` wrong guesses (config store, default 5) the leg locks and the driver calls support.
 - **Pickup code lock (ACC-11):** at the wrong-attempt limit only code entry locks for that leg; the trip carries on and ops get one alert. Reissuing the code (ACC-10) issues a new version, clears the lock, resolves the alert and sends the traveller the new code.
+- **Development shortcuts (ACC-12)**: codes in API responses only when `NODE_ENV=development`; fake providers only in development and the test runner. Anywhere else the API refuses to start with a fake provider.
 - **Driver status** has one extra value, `ONBOARDING`, for a driver ops have created but not yet invited. The PRD flow Invited, Activated, Active, Suspended follows from there.
 - **Pickup and drop-off points at the airport** are placeholders until FAAN confirms zones (PRD 3.4).

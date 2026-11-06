@@ -836,6 +836,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OwnBookingsController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bookings/{id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OwnBookingsController_pay_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bookings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OwnBookingsController_status_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/bookings": {
         parameters: {
             query?: never;
@@ -845,7 +893,71 @@ export interface paths {
         };
         get: operations["AdminBookingsController_list_v1"];
         put?: never;
+        post: operations["OpsBookingsController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/stuck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminBookingsController_stuck_v1"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminBookingsController_detail_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminBookingsController_retry_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminBookingsController_cancel_v1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -862,6 +974,86 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["QuotesController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/places/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlacesController_search_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/places/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlacesController_reverse_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/pricing/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminPricingController_rules_v1"];
+        put?: never;
+        post: operations["AdminPricingController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/pricing/rules/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminPricingController_end_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/pricing/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminPricingController_simulate_v1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -910,6 +1102,118 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["DriverPickupCodeController_check_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PaymentWebhookController_receive_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/{id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminPaymentsController_refund_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/bookings/{id}/refundable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminPaymentsController_refundable_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminPaymentsController_list_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/payments/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdminPaymentsController_reconcile_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ledger/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminPaymentsController_balances_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/system/payments/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SystemPaymentsController_reconcile_v1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2387,16 +2691,258 @@ export interface operations {
             };
         };
     };
+    OwnBookingsController_create_v1: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    quoteId: string;
+                    airlineBookingReference: string;
+                    traveller: {
+                        name: string;
+                        phone: string;
+                        /** @default true */
+                        whatsapp?: boolean;
+                        /** Format: email */
+                        email?: string;
+                    };
+                    /**
+                     * @default OWN_PAGE
+                     * @enum {string}
+                     */
+                    channel?: "OWN_PAGE" | "LINK";
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OwnBookingsController_pay_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    payToken: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OwnBookingsController_status_v1: {
+        parameters: {
+            query: {
+                t: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AdminBookingsController_list_v1: {
         parameters: {
             query: {
                 limit: string;
+                q: string;
+                status: string;
             };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OpsBookingsController_create_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    airlineCode?: string;
+                    legs: {
+                        /** @enum {string} */
+                        type: "DEPARTURE" | "ARRIVAL";
+                        flightNumber: string;
+                        date: string;
+                        address: {
+                            text: string;
+                            location: {
+                                lat: number;
+                                lng: number;
+                            };
+                            landmark?: string;
+                        };
+                    }[];
+                    passengers: number;
+                    bags: number;
+                    /**
+                     * @default PRIVATE
+                     * @enum {string}
+                     */
+                    rideType?: "PRIVATE" | "SHARED";
+                    /** @enum {string} */
+                    vehicleClass?: "SEDAN" | "SUV" | "VAN";
+                    /**
+                     * @default STANDARD
+                     * @enum {string}
+                     */
+                    plan?: "STANDARD" | "FLEX";
+                    /**
+                     * @default {
+                     *       "childSeats": 0,
+                     *       "extraStops": 0
+                     *     }
+                     */
+                    extras?: {
+                        /** @default 0 */
+                        childSeats?: number;
+                        /** @default 0 */
+                        extraStops?: number;
+                    };
+                    promoCode?: string;
+                    airlineBookingReference: string;
+                    traveller: {
+                        name: string;
+                        phone: string;
+                        /** @default true */
+                        whatsapp?: boolean;
+                        /** Format: email */
+                        email?: string;
+                    };
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminBookingsController_stuck_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminBookingsController_detail_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminBookingsController_retry_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminBookingsController_cancel_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -2416,35 +2962,19 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    airlineCode?: string;
                     legs: {
                         /** @enum {string} */
                         type: "DEPARTURE" | "ARRIVAL";
-                        pickup: {
+                        flightNumber: string;
+                        date: string;
+                        address: {
                             text: string;
                             location: {
                                 lat: number;
                                 lng: number;
                             };
                             landmark?: string;
-                        };
-                        dropoff: {
-                            text: string;
-                            location: {
-                                lat: number;
-                                lng: number;
-                            };
-                            landmark?: string;
-                        };
-                        flight: {
-                            flightNumber: string;
-                            date: string;
-                            origin: string;
-                            destination: string;
-                            /** Format: date-time */
-                            scheduledDeparture: string;
-                            /** Format: date-time */
-                            scheduledArrival: string;
-                            terminal?: string;
                         };
                     }[];
                     passengers: number;
@@ -2461,11 +2991,202 @@ export interface operations {
                      * @enum {string}
                      */
                     plan?: "STANDARD" | "FLEX";
+                    /**
+                     * @default {
+                     *       "childSeats": 0,
+                     *       "extraStops": 0
+                     *     }
+                     */
+                    extras?: {
+                        /** @default 0 */
+                        childSeats?: number;
+                        /** @default 0 */
+                        extraStops?: number;
+                    };
+                    promoCode?: string;
                 };
             };
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlacesController_search_v1: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlacesController_reverse_v1: {
+        parameters: {
+            query: {
+                lat: string;
+                lng: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPricingController_rules_v1: {
+        parameters: {
+            query: {
+                type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPricingController_create_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    type: "ZONE_FARE" | "CEILING" | "FEE" | "SURCHARGE" | "VEHICLE_CLASS" | "PLAN" | "SHARED_SHARE" | "DISCOUNT" | "TAX" | "ROUNDING" | "COST_MODEL" | "MARGIN_FLOOR" | "REVENUE_SHARE";
+                    key: string;
+                    values?: unknown;
+                    /** Format: date-time */
+                    effectiveFrom?: string;
+                    /** Format: date-time */
+                    effectiveTo?: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPricingController_end_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date-time */
+                    effectiveTo?: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPricingController_simulate_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    airlineCode?: string;
+                    legs: {
+                        /** @enum {string} */
+                        type: "DEPARTURE" | "ARRIVAL";
+                        flightNumber: string;
+                        date: string;
+                        address: {
+                            text: string;
+                            location: {
+                                lat: number;
+                                lng: number;
+                            };
+                            landmark?: string;
+                        };
+                    }[];
+                    passengers: number;
+                    bags: number;
+                    /**
+                     * @default PRIVATE
+                     * @enum {string}
+                     */
+                    rideType?: "PRIVATE" | "SHARED";
+                    /** @enum {string} */
+                    vehicleClass?: "SEDAN" | "SUV" | "VAN";
+                    /**
+                     * @default STANDARD
+                     * @enum {string}
+                     */
+                    plan?: "STANDARD" | "FLEX";
+                    /**
+                     * @default {
+                     *       "childSeats": 0,
+                     *       "extraStops": 0
+                     *     }
+                     */
+                    extras?: {
+                        /** @default 0 */
+                        childSeats?: number;
+                        /** @default 0 */
+                        extraStops?: number;
+                    };
+                    promoCode?: string;
+                };
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2527,6 +3248,142 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentWebhookController_receive_v1: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-paystack-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPaymentsController_refund_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    amountKobo: number;
+                    reason: string;
+                    /** Format: uuid */
+                    legId?: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPaymentsController_refundable_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPaymentsController_list_v1: {
+        parameters: {
+            query: {
+                status: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPaymentsController_reconcile_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminPaymentsController_balances_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SystemPaymentsController_reconcile_v1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

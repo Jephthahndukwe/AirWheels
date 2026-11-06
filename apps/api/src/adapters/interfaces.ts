@@ -19,18 +19,33 @@ export interface SendResult {
   accepted: boolean;
 }
 
-/** Paystack for our own channel (PAY-01). */
+/** Paystack for our own channel (PAY-01). Amounts are integer kobo, as Paystack uses. */
+export type GatewayStatus = 'success' | 'failed' | 'abandoned' | 'pending' | 'reversed';
+
+export interface GatewayTransaction {
+  reference: string;
+  status: GatewayStatus;
+  amountKobo: number;
+  currency: string;
+  feesKobo: number;
+  paidAt?: string;
+}
+
 export interface PaymentsAdapter {
+  readonly mode: 'live' | 'fake';
   initialize(input: {
     reference: string;
     amountKobo: number;
     email: string;
     callbackUrl: string;
+    metadata?: Record<string, string>;
   }): Promise<{ authorizationUrl: string; reference: string }>;
-  verify(reference: string): Promise<{ status: 'success' | 'failed' | 'pending'; amountKobo: number }>;
+  verify(reference: string): Promise<GatewayTransaction | null>;
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean;
-  refund(reference: string, amountKobo: number): Promise<{ refundId: string }>;
+  refund(reference: string, amountKobo: number): Promise<{ refundId: string; status: 'processed' | 'pending' }>;
   transfer(input: { recipientCode: string; amountKobo: number; reference: string }): Promise<{ transferId: string }>;
+  /** Transactions created in a time window, for reconciliation (PAY-06). */
+  listTransactions(from: Date, to: Date): Promise<GatewayTransaction[]>;
 }
 
 /** WhatsApp Cloud API (TRV-01, TRV-12). */
@@ -62,8 +77,19 @@ export interface LatLng {
 }
 
 /** Google Maps Platform (Places, Routes, Geocoding). */
+export interface Place {
+  placeId: string;
+  name: string;
+  description: string;
+  location: LatLng;
+}
+
 export interface MapsAdapter {
   geocode(text: string): Promise<(LatLng & { formatted: string }) | null>;
+  /** Places search for address entry (CHN-07). */
+  searchPlaces(query: string): Promise<Place[]>;
+  /** The nearest named place to a dropped pin. */
+  reverseGeocode(point: LatLng): Promise<Place | null>;
   travelTimeMinutes(from: LatLng, to: LatLng, departAt: Date): Promise<number>;
 }
 
@@ -71,6 +97,10 @@ export interface FlightStatusResult {
   flightNumber: string;
   date: string;
   status: 'SCHEDULED' | 'DELAYED' | 'DEPARTED' | 'LANDED' | 'CANCELLED' | 'DIVERTED';
+  origin?: string;
+  destination?: string;
+  scheduledDeparture?: Date;
+  scheduledArrival?: Date;
   estimatedDeparture?: Date;
   estimatedArrival?: Date;
   actualDeparture?: Date;
@@ -80,7 +110,8 @@ export interface FlightStatusResult {
 
 /** AeroDataBox backup flight status (FLT-03). */
 export interface FlightStatusAdapter {
-  lookup(flightNumber: string, date: string): Promise<FlightStatusResult | null>;
+  /** `airport` hints which end is ours (LOS), so a fake can answer either direction. */
+  lookup(flightNumber: string, date: string, hint?: { leg: 'DEPARTURE' | 'ARRIVAL'; airport: string }): Promise<FlightStatusResult | null>;
 }
 
 /** Smile ID, Dojah or Youverify (5.2). */

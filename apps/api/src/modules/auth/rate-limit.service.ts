@@ -36,7 +36,11 @@ export class RateLimitService implements OnModuleDestroy {
   async hit(bucket: string, id: string): Promise<{ allowed: boolean; retryAfterSeconds: number; limit: number; remaining: number }> {
     const rules = await this.config.get<Record<string, RateLimitRule>>(CONFIG.rateLimits);
     const rule = rules[bucket];
-    if (!rule) throw new Error(`No rate limit configured for bucket "${bucket}" (config key ${CONFIG.rateLimits}).`);
+    if (!rule) {
+      // A missing bucket must not take a page down: allow, and say so loudly so ops add it.
+      this.log.error({ bucket }, `No rate limit configured for bucket "${bucket}" (config key ${CONFIG.rateLimits}); allowing`);
+      return { allowed: true, retryAfterSeconds: 0, limit: 0, remaining: 0 };
+    }
     const window = Math.floor(Date.now() / 1000 / rule.windowSeconds);
     const key = `rl:${bucket}:${id}:${window}`;
     try {

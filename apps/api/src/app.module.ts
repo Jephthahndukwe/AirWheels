@@ -20,7 +20,7 @@ import { IntakeModule } from './modules/intake/intake.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { MediaModule } from './modules/media/media.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
-import { PaymentsModule } from './modules/payments/payments.module';
+import { LedgerModule, PaymentsModule } from './modules/payments/payments.module';
 import { PolicyModule } from './modules/policy/policy.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { SettlementModule } from './modules/settlement/settlement.module';
@@ -50,6 +50,7 @@ class HealthController {
     AdaptersModule,
     ConfigStoreModule,
     AuditModule,
+    LedgerModule,
     // domain modules (PRD 4.3)
     AuthModule,
     DriversModule,
