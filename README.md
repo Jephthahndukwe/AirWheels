@@ -1,7 +1,7 @@
 # Airwheels
 
 Door-to-door airport transfers sold inside airline booking flows. Lagos first.
-The source of truth is **PRD v2.2** (November 1, 2026). Section numbers in code comments (e.g. `PRD 10.1`, `CHN-03`) point to it.
+The source of truth is **PRD v2.3** (November 4, 2026). Section numbers in code comments (e.g. `PRD 10.1`, `CHN-03`) point to it.
 
 ## Setup (about 5 minutes)
 
@@ -27,6 +27,23 @@ pnpm dev
 | Admin dashboard | http://localhost:3001 |
 | Widget host page (fake airline checkout) | http://localhost:3002 |
 | Mock airline control panel | http://localhost:4100 |
+
+### First sign-in to the admin (M1)
+
+Staff accounts are never seeded. Create the first super admin once, with the one-time command (it refuses if a super admin exists):
+
+```bash
+pnpm --filter @airwheels/api build      # the command runs from the compiled API
+pnpm admin:create-super --email you@company.com --name "Your Name"
+```
+
+Open the printed link (in development email is faked, so the link is printed), scan the QR code with an authenticator app, set a password and finish. Then invite staff from **Staff and roles**. In development, invite links, driver invite codes and SMS codes are also returned by the API and shown in the admin and the driver app, because email and SMS are fake.
+
+To check the whole M1 path end to end against a running API: `pnpm --filter @airwheels/api flow:m1`.
+
+### Driver app on a phone or tablet
+
+Set `EXPO_PUBLIC_API_URL` in `apps/driver/.env` to your computer's LAN address (for example `http://192.168.1.20:4000`), run `pnpm driver`, and open it in Expo Go. Onboard and invite the driver in the admin, then tap **Activate** in the app. Suspending the driver in the admin signs the app out within about 5 seconds.
 
 ### Send a booking from the mock airline
 
@@ -127,9 +144,21 @@ Rotating the encryption key does not change pickup codes, because they use `PICK
 
 To rotate a single airline's **signing secret** (not the encryption key), issue a new `AirlineCredential` for the airline, share it with them, then set the old one to `REVOKED` (admin screen in M5).
 
+## Access control (M1)
+
+- **Deny by default.** A global guard checks every route. A route needs `@Roles(...)` or `@Public()`; anything else is blocked. `apps/api/src/route-access.test.ts` boots the app and calls every route as every role (driver, ops agent, super admin, finance, airline partner, system, anonymous) against the access table from PRD 2.2. A new route fails that test until it is added to the table.
+- **Sessions** are server-side rows. The bearer token (a signed JWT) only names the row, so sign-out, suspension, role changes and new-device sign-in take effect on the next request.
+- **Admins:** email, password (argon2id), TOTP (secret encrypted with `APP_ENCRYPTION_KEY`, codes cannot be reused), inactivity timeout, account lock after repeated failures, and sign-in history.
+- **Drivers:** no sign-up. Ops create the driver, upload documents to private storage, run KYC, assign a vehicle, tick training and send the invite. The driver activates with the SMS code plus the invite code, sets a six-digit PIN and is bound to one device; a new device needs an SMS code and signs out the old one.
+- **Finance** is read-only everywhere, enforced in the guard as well as per route.
+- **Audit:** services record who, what, before and after. A safety net records any admin write a service did not. Viewer at **Audit log**.
+- **Rate limits** (Redis, per IP or per airline key) and every timeout, lockout and expiry live in the config store, editable by super admins at **Settings**.
+- **System jobs** call internal routes with `SYSTEM_API_TOKEN`.
+
 ## Notes and decisions
 
 - **Airline signing secrets** are stored AES-256-GCM encrypted, not hashed (PRD 18 says "secret hash"), because verifying an HMAC signature needs the secret itself.
 - **Pickup codes** are derived from the leg id and the leg's code version with `PICKUP_CODE_KEY`, so the tracking page can show them again while only a hash is stored (PRD 19.1). Ops reissue a code with `POST /v1/admin/legs/:id/pickup-code/reissue`, which bumps the version so the old code stops working. After `dispatch.pickupCodeMaxAttempts` wrong guesses (config store, default 5) the leg locks and the driver calls support.
-- **Admin endpoints** are open only when `NODE_ENV` is exactly `development`. Any other value, or no value, blocks them until admin sign-in lands in M1.
+- **Pickup code lock (ACC-11):** at the wrong-attempt limit only code entry locks for that leg; the trip carries on and ops get one alert. Reissuing the code (ACC-10) issues a new version, clears the lock, resolves the alert and sends the traveller the new code.
+- **Driver status** has one extra value, `ONBOARDING`, for a driver ops have created but not yet invited. The PRD flow Invited, Activated, Active, Suspended follows from there.
 - **Pickup and drop-off points at the airport** are placeholders until FAAN confirms zones (PRD 3.4).

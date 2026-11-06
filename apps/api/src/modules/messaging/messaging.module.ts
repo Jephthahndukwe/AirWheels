@@ -75,6 +75,9 @@ export class MessagingProcessor extends WorkerHost {
 
 /** Plain-text body for SMS. Per-airline templates from MessageTemplate replace this in M3. */
 function renderFallback(event: string, v: Record<string, string>): string {
+  if (event.startsWith('pickup_code.reissued')) {
+    return `${v.serviceName ?? 'Airwheels'}: your new pickup code is ${v.pickupCode}. Give it to your driver. The old code no longer works.`;
+  }
   switch (event) {
     case 'booking.confirmed':
       return `${v.serviceName}: your airport transfer is confirmed. Pickup code ${v.pickupCodes}. Track: ${v.trackingUrl}`;

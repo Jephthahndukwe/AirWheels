@@ -1,5 +1,5 @@
 import { formatNaira } from '@airwheels/types';
-import { API_URL } from '@/lib/utils';
+import { api, requireMe } from '@/lib/api';
 
 type Row = {
   id: string;
@@ -18,13 +18,13 @@ type Row = {
 export const dynamic = 'force-dynamic';
 
 export default async function Bookings() {
+  await requireMe();
   let rows: Row[] = [];
   let error: string | null = null;
   try {
-    const r = await fetch(`${API_URL}/v1/admin/bookings`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`API returned ${r.status}`);
-    rows = (await r.json()) as Row[];
+    rows = await api<Row[]>('/v1/admin/bookings');
   } catch (e) {
+    if (e && typeof e === 'object' && 'digest' in e) throw e;
     error = (e as Error).message;
   }
 

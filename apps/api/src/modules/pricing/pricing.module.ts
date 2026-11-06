@@ -2,6 +2,7 @@ import { Body, Controller, Module, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PartnerQuoteRequest } from '@airwheels/types';
 import { ApiZodBody, ZodPipe } from '../../common/zod';
+import { Public, RateLimit } from '../../common/auth/roles';
 import { PricingService } from './pricing.service';
 
 /** Our own booking page asks for quotes here. Airlines use POST /v1/partner/quotes. */
@@ -11,6 +12,8 @@ export class QuotesController {
   constructor(private readonly pricing: PricingService) {}
 
   @Post()
+  @Public()
+  @RateLimit('publicQuotes')
   @ApiZodBody(PartnerQuoteRequest)
   create(@Body(new ZodPipe(PartnerQuoteRequest)) body: PartnerQuoteRequest) {
     return this.pricing.quote(body, null);

@@ -18,6 +18,7 @@
     "lucide-react": "^1.66.0",
     "next": "^15.5.28",
     "posthog-js": "^1.444.0",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwind-merge": "^3.7.0"
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@airwheels/config": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "dotenv": "^18.0.9",

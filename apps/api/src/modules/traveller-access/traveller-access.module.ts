@@ -1,9 +1,12 @@
-import { Controller, Get, HttpCode, Injectable, Module, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Injectable, Module, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { z } from 'zod';
 import { ApiTags } from '@nestjs/swagger';
 import { OPERATOR_NAME } from '@airwheels/ui';
 import { randomToken, sha256 } from '../../common/crypto';
 import { PrismaService } from '../../common/prisma.service';
-import { DevOnlyGuard } from '../admin/dev-only.guard';
+import { AdminWrite, type AuthedRequest, Public, RateLimit, Roles, requireAdmin, requireDriver } from '../../common/auth/roles';
+import { ApiZodBody, ZodPipe } from '../../common/zod';
+import { MessagingModule } from '../messaging/messaging.module';
 import { pickupCodeFor } from './codes';
 import { PickupCodesService } from './pickup-codes.service';
 
@@ -78,27 +81,48 @@ export class TrackingController {
 
   /** GET /v1/t/:token — tracking page data. */
   @Get(':token')
+  @Public()
+  @RateLimit('trackingPage')
   view(@Param('token') token: string) {
     return this.access.view(token);
   }
 }
 
-/** Ops reissue a pickup code (new version, attempts reset). Behind admin auth in M1. */
+const PickupCodeEntry = z.object({ code: z.string().regex(/^\d{4}$/) });
+
+/** Ops reissue a pickup code (ACC-10): new version, lock and attempts cleared, traveller sent the new code. */
 @ApiTags('admin')
-@UseGuards(DevOnlyGuard)
 @Controller({ path: 'admin/legs', version: '1' })
 export class AdminPickupCodeController {
   constructor(private readonly codes: PickupCodesService) {}
 
   @Post(':id/pickup-code/reissue')
   @HttpCode(200)
-  reissue(@Param('id') id: string) {
-    return this.codes.reissue(id);
+  @AdminWrite()
+  reissue(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.codes.reissue(id, requireAdmin(req).userId);
+  }
+}
+
+/** The assigned driver enters the traveller's code before Start trip (DSP-08, DRV-07). */
+@ApiTags('driver')
+@Controller({ path: 'driver/legs', version: '1' })
+export class DriverPickupCodeController {
+  constructor(private readonly codes: PickupCodesService) {}
+
+  @Post(':id/pickup-code')
+  @HttpCode(200)
+  @Roles('DRIVER')
+  @RateLimit('pickupCode', 'principal')
+  @ApiZodBody(PickupCodeEntry)
+  check(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(PickupCodeEntry)) body: z.infer<typeof PickupCodeEntry>) {
+    return this.codes.verify(id, body.code, requireDriver(req).driverId);
   }
 }
 
 @Module({
-  controllers: [TrackingController, AdminPickupCodeController],
+  imports: [MessagingModule],
+  controllers: [TrackingController, AdminPickupCodeController, DriverPickupCodeController],
   providers: [TravellerAccessService, PickupCodesService],
   exports: [TravellerAccessService, PickupCodesService],
 })

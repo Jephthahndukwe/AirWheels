@@ -11,7 +11,6 @@ import {
   Patch,
   Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import {
@@ -25,7 +24,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { ApiZodBody, ZodPipe } from '../../common/zod';
 import { AirlinesModule } from '../airlines/airlines.module';
-import { PartnerGuard, type PartnerRequest } from '../airlines/partner.guard';
+import { RateLimit, Roles } from '../../common/auth/roles';
+import type { PartnerRequest } from '../airlines/partner.guard';
 import { BookingsModule } from '../bookings/bookings.module';
 import { BookingsService } from '../bookings/bookings.service';
 import { FlightsModule, FlightsService } from '../flights/flights.module';
@@ -41,7 +41,8 @@ import { IdempotencyService } from './idempotency';
 @ApiHeader({ name: PARTNER_HEADERS.keyId, required: true })
 @ApiHeader({ name: PARTNER_HEADERS.timestamp, required: true, description: 'Unix ms' })
 @ApiHeader({ name: PARTNER_HEADERS.signature, required: true, description: 'HMAC-SHA256 hex' })
-@UseGuards(PartnerGuard)
+@Roles('PARTNER')
+@RateLimit('partner', 'partner')
 @Controller({ path: 'partner', version: '1' })
 export class PartnerController {
   constructor(

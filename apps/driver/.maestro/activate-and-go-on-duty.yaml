@@ -1,6 +1,9 @@
 # Maestro flow for the driver app. Run on an emulator or device with:
 #   pnpm --filter @airwheels/driver test:maestro
-# Install Maestro first: https://maestro.mobile.dev
+# Needs a running API in development mode and a driver invited from the admin.
+# Pass the invited phone number and invite code:
+#   maestro test -e PHONE=08012345678 -e INVITE=123456 .maestro
+# In development the API returns the SMS code, and the app shows it on screen.
 appId: host.exp.Exponent # Expo Go. Use ng.airwheels.driver for a dev build.
 ---
 - launchApp
@@ -8,8 +11,28 @@ appId: host.exp.Exponent # Expo Go. Use ng.airwheels.driver for a dev build.
 - tapOn:
     id: "activate"
 - tapOn:
+    id: "phone"
+- inputText: ${PHONE}
+- tapOn:
+    id: "send-code"
+- copyTextFrom:
+    text: "Development only: your SMS code is .*"
+- tapOn:
+    id: "otp"
+- inputText: ${maestro.copiedText.slice(-6)}
+- tapOn:
     id: "invite-code"
-- inputText: "123456"
+- inputText: ${INVITE}
 - tapOn:
     id: "activate-submit"
+- tapOn:
+    id: "pin"
+- inputText: "482913"
+- tapOn:
+    id: "pin2"
+- inputText: "482913"
+- tapOn:
+    id: "terms"
+- tapOn:
+    id: "pin-submit"
 - assertVisible: "You are off duty"

@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type {
   EmailAdapter,
   FlightStatusAdapter,
@@ -109,13 +111,52 @@ export class FakeEmail implements EmailAdapter {
   }
 }
 
+/**
+ * Local private storage for development: files live under `.storage/` at the repo root and are
+ * reached only through short-lived HMAC-signed URLs served by FakeStorageController.
+ */
 export class FakeStorage implements StorageAdapter {
-  async signedUploadUrl(key: string) {
-    return `http://localhost:4000/v1/fake-storage/${encodeURIComponent(key)}?op=put`;
+  async signedUploadUrl(key: string, contentType: string) {
+    return signedStorageUrl('put', key, 15 * 60, contentType);
   }
-  async signedDownloadUrl(key: string) {
-    return `http://localhost:4000/v1/fake-storage/${encodeURIComponent(key)}`;
+  async signedDownloadUrl(key: string, ttlSeconds: number) {
+    return signedStorageUrl('get', key, ttlSeconds);
   }
+  async exists(key: string) {
+    try {
+      return { sizeBytes: statSync(localStoragePath(key)).size };
+    } catch {
+      return null;
+    }
+  }
+}
+
+export const localStorageRoot = () => resolve(__dirname, '../../../../.storage');
+
+export function localStoragePath(key: string): string {
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(key) || key.includes('..')) throw new Error('Bad storage key');
+  return join(localStorageRoot(), key);
+}
+
+const storageSig = (op: string, key: string, exp: number, contentType = '') =>
+  createHmac('sha256', `storage:${process.env.JWT_SECRET ?? ''}`).update(`${op}
+${key}
+${exp}
+${contentType}`).digest('hex');
+
+export function signedStorageUrl(op: 'put' | 'get', key: string, ttlSeconds: number, contentType = ''): string {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const base = process.env.API_PUBLIC_URL ?? 'http://localhost:4000';
+  const q = new URLSearchParams({ key, op, exp: String(exp), sig: storageSig(op, key, exp, contentType) });
+  return `${base}/v1/fake-storage?${q.toString()}`;
+}
+
+export function checkStorageSignature(op: string, key: string, exp: string, sig: string, contentType = ''): boolean {
+  const e = Number(exp);
+  if (!Number.isFinite(e) || e * 1000 < Date.now()) return false;
+  const expected = Buffer.from(storageSig(op, key, e, contentType));
+  const given = Buffer.from(sig);
+  return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
 export class FakePush implements PushAdapter {

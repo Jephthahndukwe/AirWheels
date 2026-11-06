@@ -12,6 +12,7 @@ const fill = (key, value) => {
 fill('APP_ENCRYPTION_KEY', randomBytes(32).toString('hex'));
 fill('PICKUP_CODE_KEY', randomBytes(32).toString('hex'));
 fill('JWT_SECRET', randomBytes(32).toString('hex'));
+fill('SYSTEM_API_TOKEN', randomBytes(32).toString('hex'));
 fill('MOCK_AIRLINE_SECRET', randomBytes(24).toString('hex'));
 writeFileSync('.env', env);
 console.log('.env ready');

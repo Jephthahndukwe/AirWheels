@@ -1,6 +1,6 @@
-import { Controller, Get, Module, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Module, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { DevOnlyGuard } from '../admin/dev-only.guard';
+import { AdminRead } from '../../common/auth/roles';
 import { FlightsModule } from '../flights/flights.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { PricingModule } from '../pricing/pricing.module';
@@ -8,7 +8,7 @@ import { TravellerAccessModule } from '../traveller-access/traveller-access.modu
 import { BookingsService } from './bookings.service';
 
 @ApiTags('admin')
-@UseGuards(DevOnlyGuard)
+@AdminRead()
 @Controller({ path: 'admin/bookings', version: '1' })
 export class AdminBookingsController {
   constructor(private readonly bookings: BookingsService) {}

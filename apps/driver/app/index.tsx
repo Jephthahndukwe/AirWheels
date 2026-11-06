@@ -1,11 +1,38 @@
-import { Link } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Link, router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { call, getToken, setToken, type Me } from '@/api';
 import { brand, space, ui } from '@/theme';
 
 /**
- * Driver-only door (ACC-04): activate with an invite, or log in. There is no sign-up.
+ * Driver-only door (ACC-04): activate with an invite, or sign in. There is no sign-up.
+ * With a saved session that still works, go straight to Home.
  */
 export default function Welcome() {
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      if (await getToken()) {
+        try {
+          await call<Me>('GET', '/v1/driver/me');
+          router.replace('/home');
+          return;
+        } catch {
+          await setToken(null);
+        }
+      }
+      setChecking(false);
+    })();
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={[ui.screen, { justifyContent: 'center' }]}>
+        <ActivityIndicator color={brand.coral} />
+      </View>
+    );
+  }
   return (
     <View style={[ui.screen, { justifyContent: 'center' }]}>
       <Text style={[ui.h1, { fontSize: 34 }]}>

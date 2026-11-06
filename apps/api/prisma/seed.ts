@@ -1,5 +1,5 @@
 import { PrismaClient, type VehicleClass } from '@prisma/client';
-import { encrypt, sha256 } from '../src/common/crypto';
+import { encrypt } from '../src/common/crypto';
 import { haversineKm } from '../src/adapters/fakes';
 import {
   airport,
@@ -14,6 +14,9 @@ const prisma = new PrismaClient();
 const EPOCH = new Date('2026-01-01T00:00:00Z');
 
 async function main() {
+  // Seed data is for local development and CI only. Staff accounts are never seeded: the first
+  // super admin comes from `pnpm admin:create-super`.
+  if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed a production database.');
   const secret = process.env.MOCK_AIRLINE_SECRET;
   if (!secret) throw new Error('MOCK_AIRLINE_SECRET is empty. Run `pnpm setup:env` first.');
 
@@ -138,7 +141,6 @@ async function main() {
         kycProvider: 'fake',
         kycResult: { passed: true, seeded: true },
         kycVerifiedAt: new Date(),
-        pinHash: sha256('local-dev-pin:123456'),
         trainingChecklist: { airportRules: true, pickupCodes: true, customerCare: true },
       },
     });

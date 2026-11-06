@@ -89,6 +89,7 @@ enum SharedGroupStatus {
 }
 
 enum DriverStatus {
+  ONBOARDING // created by ops, invite not sent yet
   INVITED
   ACTIVATED
   ACTIVE
@@ -104,6 +105,21 @@ enum AdminRole {
 enum UserStatus {
   ACTIVE
   DISABLED
+}
+
+enum SessionKind {
+  ADMIN
+  DRIVER
+}
+
+enum ChallengePurpose {
+  DRIVER_ACTIVATION
+  DRIVER_NEW_DEVICE
+}
+
+enum AlertStatus {
+  OPEN
+  RESOLVED
 }
 
 enum AirlineStatus {
@@ -286,6 +302,10 @@ model AirlineCredential {
   allowedIps      String[]
   status          CredentialStatus @default(ACTIVE)
   rotatedAt       DateTime?        @db.Timestamptz(3)
+  /// Set on the old key when it is rotated: it keeps working until then (grace period).
+  expiresAt       DateTime?        @db.Timestamptz(3)
+  revokedAt       DateTime?        @db.Timestamptz(3)
+  createdById     String?          @db.Uuid
   createdAt       DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
 }
@@ -334,6 +354,8 @@ model User {
   updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
   driverProfile DriverProfile?
   adminProfile  AdminProfile?
+  sessions      Session[]
+  loginEvents   LoginEvent[]
 }
 
 model DriverProfile {
@@ -343,14 +365,25 @@ model DriverProfile {
   firstName          String
   lastName           String
   photoUrl           String?
-  status             DriverStatus        @default(INVITED)
+  status             DriverStatus        @default(ONBOARDING)
   kycProvider        String?
   kycResult          Json?
   kycVerifiedAt      DateTime?           @db.Timestamptz(3)
   ratingAvg          Float?
   ratingCount        Int                 @default(0)
-  pinHash            String?
-  deviceId           String?
+  pinHash            String? // argon2id
+  pinFailedCount     Int                 @default(0)
+  pinLockedUntil     DateTime?           @db.Timestamptz(3)
+  deviceId           String? // the one device allowed to sign in (ACC-06)
+  licenceNumber      String?
+  idType             String? // NIN | DRIVERS_LICENSE
+  idNumber           String?
+  address            String?
+  referees           Json?
+  termsAcceptedAt    DateTime?           @db.Timestamptz(3)
+  activatedAt        DateTime?           @db.Timestamptz(3)
+  suspendedAt        DateTime?           @db.Timestamptz(3)
+  suspendedReason    String?
   onDuty             Boolean             @default(false)
   startLat           Float?
   startLng           Float?
@@ -375,7 +408,11 @@ model AdminProfile {
   user       User      @relation(fields: [userId], references: [id])
   name       String
   role       AdminRole
-  totpSecret String? // encrypted
+  totpSecret String? // AES-256-GCM encrypted with APP_ENCRYPTION_KEY
+  lastTotpStep Int? // last accepted TOTP time step, so a code cannot be replayed
+  failedLoginCount Int @default(0)
+  lockedUntil DateTime? @db.Timestamptz(3)
+  invitedById String? @db.Uuid
   lastLoginAt DateTime? @db.Timestamptz(3)
   lastLoginIp String?
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
@@ -387,10 +424,12 @@ model DriverInvite {
   driverId  String        @db.Uuid
   driver    DriverProfile @relation(fields: [driverId], references: [id])
   phone     String
-  codeHash  String
+  codeHash  String // argon2id
+  attempts  Int           @default(0)
   expiresAt DateTime      @db.Timestamptz(3)
   usedAt    DateTime?     @db.Timestamptz(3)
   revokedAt DateTime?     @db.Timestamptz(3)
+  sentById  String?       @db.Uuid
   createdAt DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt DateTime      @updatedAt @db.Timestamptz(3)
 }
@@ -444,6 +483,10 @@ model Document {
   ownerId    String    @db.Uuid
   type       String // LICENCE | NIN | INSURANCE | ROADWORTHINESS ...
   storageKey String
+  fileName   String?
+  contentType String?
+  uploadedAt DateTime? @db.Timestamptz(3) // set once the file is confirmed in storage
+  uploadedById String? @db.Uuid
   expiresAt  DateTime? @db.Timestamptz(3)
   verifiedBy String?   @db.Uuid
   verifiedAt DateTime? @db.Timestamptz(3)
@@ -970,6 +1013,7 @@ model AuditLog {
   id        String   @id @default(uuid()) @db.Uuid
   actorId   String?
   actorRole ActorRole
+  actorLabel String? // email, phone or airline code at the time
   action    String
   entity    String
   entityId  String?
@@ -981,6 +1025,104 @@ model AuditLog {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([entity, entityId])
+  @@index([time])
+  @@index([actorId])
+}
+
+// ---------- identity (M1) ----------
+
+/// A signed-in admin or driver. The bearer token is a signed JWT whose `sid` points here,
+/// so revoking a row (sign out, suspension, new device) ends the session on the next request.
+model Session {
+  id           String      @id @default(uuid()) @db.Uuid
+  userId       String      @db.Uuid
+  user         User        @relation(fields: [userId], references: [id])
+  kind         SessionKind
+  deviceId     String?
+  ip           String?
+  userAgent    String?
+  lastSeenAt   DateTime    @default(now()) @db.Timestamptz(3)
+  expiresAt    DateTime    @db.Timestamptz(3)
+  revokedAt    DateTime?   @db.Timestamptz(3)
+  revokeReason String?
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, revokedAt])
+}
+
+/// Login history (ACC-07): every attempt, success or failure. Append-only.
+model LoginEvent {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String?     @db.Uuid
+  user       User?       @relation(fields: [userId], references: [id])
+  kind       SessionKind
+  identifier String // email or phone as typed
+  success    Boolean
+  reason     String?
+  ip         String?
+  userAgent  String?
+  deviceId   String?
+  time       DateTime    @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, time])
+}
+
+/// Staff invite by email (5.4). The first super admin is created by `pnpm admin:create-super`.
+model AdminInvite {
+  id                String    @id @default(uuid()) @db.Uuid
+  email             String
+  name              String
+  role              AdminRole
+  tokenHash         String    @unique
+  /// TOTP secret generated when the invitee opens the link, encrypted. Moves to AdminProfile on accept.
+  pendingTotpSecret String?
+  invitedById       String?   @db.Uuid
+  expiresAt         DateTime  @db.Timestamptz(3)
+  acceptedAt        DateTime? @db.Timestamptz(3)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([email])
+}
+
+/// One-time SMS codes for driver activation and new-device sign-in.
+model AuthChallenge {
+  id        String           @id @default(uuid()) @db.Uuid
+  purpose   ChallengePurpose
+  phone     String
+  userId    String?          @db.Uuid
+  codeHash  String // argon2id
+  attempts  Int              @default(0)
+  data      Json?
+  expiresAt DateTime         @db.Timestamptz(3)
+  usedAt    DateTime?        @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([phone, purpose])
+}
+
+/// Ops alerts (NTF-04): shown on the admin dashboard and pushed over the `ops` WebSocket room.
+model OpsAlert {
+  id           String      @id @default(uuid()) @db.Uuid
+  type         String // PICKUP_CODE_LOCKED | DRIVER_NEW_DEVICE | ...
+  status       AlertStatus @default(OPEN)
+  message      String
+  bookingId    String?     @db.Uuid
+  legId        String?     @db.Uuid
+  driverId     String?     @db.Uuid
+  data         Json?
+  resolvedAt   DateTime?   @db.Timestamptz(3)
+  resolvedById String?     @db.Uuid
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([legId])
 }
 
 // ---------- airports, corridors, shared rides ----------

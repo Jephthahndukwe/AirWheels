@@ -23,9 +23,10 @@ export class ConfigStore {
     return row.value as T;
   }
 
-  async set(key: string, value: unknown, updatedById?: string): Promise<void> {
+  /** Writes a new version. Callers in the admin record the audit entry with before and after. */
+  async set(key: string, value: unknown, updatedById?: string) {
     const latest = await this.prisma.configEntry.findFirst({ where: { key }, orderBy: { version: 'desc' } });
-    await this.prisma.configEntry.create({
+    const entry = await this.prisma.configEntry.create({
       data: {
         key,
         value: value as object,
@@ -35,6 +36,7 @@ export class ConfigStore {
       },
     });
     this.cache.delete(key);
+    return entry;
   }
 
   async list() {

@@ -4,6 +4,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { LoggerModule } from 'nestjs-pino';
 import { AdaptersModule } from './adapters/adapters.module';
 import { loggerParams } from './common/logging';
+import { Public } from './common/auth/roles';
 import { PrismaModule } from './common/prisma.service';
 import { AdminModule } from './modules/admin/admin.module';
 import { AirlinesModule } from './modules/airlines/airlines.module';
@@ -32,6 +33,7 @@ import { RealtimeModule } from './realtime/realtime.gateway';
 @Controller({ path: 'health', version: '1' })
 class HealthController {
   @Get()
+  @Public()
   health() {
     return { ok: true, service: 'airwheels-api', time: new Date().toISOString() };
   }

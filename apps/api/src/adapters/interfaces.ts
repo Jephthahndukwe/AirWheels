@@ -101,6 +101,7 @@ export interface EmailAdapter {
 export interface StorageAdapter {
   signedUploadUrl(key: string, contentType: string): Promise<string>;
   signedDownloadUrl(key: string, ttlSeconds: number): Promise<string>;
+  exists(key: string): Promise<{ sizeBytes: number } | null>;
 }
 
 /** Expo push for drivers. */

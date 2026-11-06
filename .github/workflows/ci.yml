@@ -33,7 +33,7 @@ jobs:
           git diff --exit-code -- packages/api-client || (echo "Run 'pnpm openapi' and commit the result." && exit 1)
 
   smoke:
-    name: Mock airline booking is stored (Postgres + Redis)
+    name: Mock airline booking and M1 identity flow (Postgres + Redis)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -48,7 +48,7 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 3s --health-retries 20
     env:
-      NODE_ENV: development # enables the dev-only admin route used by checks
+      NODE_ENV: development # fake adapters; the API returns invite and SMS codes so the flow can run
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -65,6 +65,8 @@ jobs:
           pnpm --filter @airwheels/api start > api.log 2>&1 &
           npx --yes wait-on -t 60000 http://localhost:4000/v1/health
       - run: pnpm --filter @airwheels/mock-airline smoke
+      - name: M1 flow (super admin, ops agent, driver activation, suspension, audit)
+        run: pnpm --filter @airwheels/api flow:m1
       - if: failure()
         run: cat api.log
 
