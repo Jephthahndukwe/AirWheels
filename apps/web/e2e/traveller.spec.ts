@@ -31,10 +31,52 @@ async function call(
 }
 
 let apiUp = false;
+let A: Record<string, string> = {};
+let restore: { key: string; value: unknown }[] = [];
 test.beforeAll(async () => {
   apiUp = await fetch(`${API}/v1/health`)
     .then((r) => r.ok)
     .catch(() => false);
+  if (!apiUp || !existsSync(SUPER_FILE)) return;
+  A = await admin();
+  // Earlier runs from the same machine (the M3 flow in CI) use the per-IP code limits (ACC-09);
+  // lift them and the resend cooldown for this run, and put them back afterwards.
+  const list = (await call('GET', '/v1/admin/config', undefined, A)).body;
+  const entries = (Array.isArray(list) ? list : (list.entries ?? [])) as Json[];
+  const get = (k: string) => entries.find((e) => e.key === k)?.value as Json | undefined;
+  const limits = get('rateLimits');
+  const code = get('traveller.changeCode');
+  if (limits) {
+    restore.push({ key: 'rateLimits', value: limits });
+    await call(
+      'PUT',
+      '/v1/admin/config/rateLimits',
+      {
+        value: {
+          ...limits,
+          changeCodeRequest: { limit: 100, windowSeconds: 60 },
+          changeCodeVerify: { limit: 100, windowSeconds: 60 },
+          travellerActions: { limit: 300, windowSeconds: 60 },
+        },
+      },
+      A,
+    );
+  }
+  if (code) {
+    restore.push({ key: 'traveller.changeCode', value: code });
+    await call(
+      'PUT',
+      '/v1/admin/config/traveller.changeCode',
+      {
+        value: { ...code, resendCooldownSeconds: 2 },
+      },
+      A,
+    );
+  }
+});
+test.afterAll(async () => {
+  for (const r of restore) await call('PUT', `/v1/admin/config/${r.key}`, { value: r.value }, A);
+  restore = [];
 });
 test.beforeEach(() => {
   test.skip(
@@ -169,7 +211,6 @@ test('confirmation, tracking page under 200 KB on a slow phone, and a reply butt
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 
   // The driver is confirmed for the night before: the message has Confirm · Change time · Cancel.
-  const A = await admin();
   const drivers = (await call('GET', '/v1/admin/drivers?status=ACTIVE', undefined, A))
     .body as unknown as { id: string; vehicle: string | null }[];
   const driver = drivers.find((d) => d.vehicle);
@@ -220,15 +261,12 @@ test('change, then cancel, with the six-digit code and the cost shown first', as
   await page.getByRole('button', { name: 'Confirm change' }).click();
   await expect(page.getByRole('status')).toContainText('Done.');
 
-  // A new code is needed for the cancellation (the first one is used); wait out the resend cooldown.
+  // A new code is needed for the cancellation (the first one is used).
   await page.goto(`/t/${token}/cancel`);
+  await page.waitForTimeout(2500); // the resend cooldown, shortened for this run
   await page.getByRole('button', { name: 'Text me a code' }).click();
-  let devCode = page.getByText(/Development only: your code is/);
-  if (!(await devCode.isVisible().catch(() => false))) {
-    await page.waitForTimeout(61_000);
-    await page.getByRole('button', { name: /Text me a code|Send a new code/ }).click();
-    devCode = page.getByText(/Development only: your code is/);
-  }
+  const devCode = page.getByText(/Development only: your code is/);
+  await expect(devCode).toBeVisible();
   await page.getByLabel('Six-digit code').fill((await devCode.textContent())!.replace(/\D/g, ''));
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByTestId('cancel-refund')).toContainText('You get back');
