@@ -14,7 +14,11 @@ export function initSentry(): void {
 let posthog: PostHog | null | undefined;
 
 /** Product analytics (PRD 22). No-op when POSTHOG_KEY is empty. */
-export function track(event: string, distinctId: string, properties: Record<string, unknown> = {}): void {
+export function track(
+  event: string,
+  distinctId: string,
+  properties: Record<string, unknown> = {},
+): void {
   if (posthog === undefined) {
     posthog = process.env.POSTHOG_KEY
       ? new PostHog(process.env.POSTHOG_KEY, { host: process.env.NEXT_PUBLIC_POSTHOG_HOST })

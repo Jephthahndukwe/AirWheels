@@ -45,7 +45,10 @@ export default function Welcome() {
         </Pressable>
       </Link>
       <Link href="/login" asChild>
-        <Pressable style={[ui.button, { backgroundColor: brand.ink, marginTop: space[3] }]} testID="login">
+        <Pressable
+          style={[ui.button, { backgroundColor: brand.ink, marginTop: space[3] }]}
+          testID="login"
+        >
           <Text style={ui.buttonText}>I already have an account</Text>
         </Pressable>
       </Link>

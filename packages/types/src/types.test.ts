@@ -15,8 +15,12 @@ describe('partner signing', () => {
   it('verifies a valid signature and rejects tampering', () => {
     const ts = String(Date.now());
     const sig = signPartnerRequest('s3cret', ts, 'POST', '/v1/partner/bookings', '{"a":1}');
-    expect(verifyPartnerSignature('s3cret', ts, 'POST', '/v1/partner/bookings', '{"a":1}', sig)).toBe(true);
-    expect(verifyPartnerSignature('s3cret', ts, 'POST', '/v1/partner/bookings', '{"a":2}', sig)).toBe(false);
+    expect(
+      verifyPartnerSignature('s3cret', ts, 'POST', '/v1/partner/bookings', '{"a":1}', sig),
+    ).toBe(true);
+    expect(
+      verifyPartnerSignature('s3cret', ts, 'POST', '/v1/partner/bookings', '{"a":2}', sig),
+    ).toBe(false);
   });
   it('rejects stale timestamps', () => {
     const ts = String(Date.now() - 10 * 60_000);

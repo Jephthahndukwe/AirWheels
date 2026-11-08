@@ -18,7 +18,11 @@ describe('widget', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ serviceName: 'Mock Air Transfers', theme: { primary: '#1D3E8A' }, wording: {} }),
+        json: async () => ({
+          serviceName: 'Mock Air Transfers',
+          theme: { primary: '#1D3E8A' },
+          wording: {},
+        }),
       }),
     );
     await mount({ el: '#w', airline: 'MOCK', apiUrl: 'http://x' });

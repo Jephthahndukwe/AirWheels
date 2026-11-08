@@ -1,4 +1,15 @@
-import { Controller, Get, Global, HttpCode, Module, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Global,
+  HttpCode,
+  Module,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AdminRead, AdminWrite, type AuthedRequest, requireAdmin } from '../../common/auth/roles';
 import { AlertsService } from './alerts.service';
@@ -27,5 +38,9 @@ export class AdminAlertsController {
 }
 
 @Global()
-@Module({ controllers: [AdminAlertsController], providers: [AlertsService], exports: [AlertsService] })
+@Module({
+  controllers: [AdminAlertsController],
+  providers: [AlertsService],
+  exports: [AlertsService],
+})
 export class SupportModule {}

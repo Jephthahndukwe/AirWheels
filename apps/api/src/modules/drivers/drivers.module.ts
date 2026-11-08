@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpCode, Module, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Module,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { DriverStatus } from '@prisma/client';
 import { z } from 'zod';
@@ -15,7 +28,11 @@ import { ApiZodBody, ZodPipe } from '../../common/zod';
 import { DOCUMENT_TYPES, MediaModule, MediaService } from '../media/media.module';
 import { DriversService } from './drivers.service';
 
-const Referee = z.object({ name: z.string().min(1).max(120), phone: z.string().min(7).max(20), relationship: z.string().min(1).max(60) });
+const Referee = z.object({
+  name: z.string().min(1).max(120),
+  phone: z.string().min(7).max(20),
+  relationship: z.string().min(1).max(60),
+});
 const DriverDetails = z.object({
   firstName: z.string().min(1).max(60),
   lastName: z.string().min(1).max(60),
@@ -63,7 +80,10 @@ export class AdminDriversController {
   @Get()
   @AdminRead()
   list(@Query('status') status?: string, @Query('q') q?: string) {
-    return this.drivers.list({ status: STATUSES.find((s) => s === status), search: q?.trim() || undefined });
+    return this.drivers.list({
+      status: STATUSES.find((s) => s === status),
+      search: q?.trim() || undefined,
+    });
   }
 
   @Get(':id')
@@ -75,21 +95,31 @@ export class AdminDriversController {
   @Post()
   @AdminWrite()
   @ApiZodBody(DriverDetails)
-  create(@Req() req: AuthedRequest, @Body(new ZodPipe(DriverDetails)) body: z.infer<typeof DriverDetails>) {
+  create(
+    @Req() req: AuthedRequest,
+    @Body(new ZodPipe(DriverDetails)) body: z.infer<typeof DriverDetails>,
+  ) {
     return this.drivers.create({ ...body, createdByAdminId: requireAdmin(req).userId });
   }
 
   @Patch(':id')
   @AdminWrite()
   @ApiZodBody(DriverUpdate)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(DriverUpdate)) body: z.infer<typeof DriverUpdate>) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(DriverUpdate)) body: z.infer<typeof DriverUpdate>,
+  ) {
     return this.drivers.updateDetails(id, body);
   }
 
   @Post(':id/documents')
   @AdminWrite()
   @ApiZodBody(DocumentUpload)
-  upload(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(DocumentUpload)) body: z.infer<typeof DocumentUpload>) {
+  upload(
+    @Req() req: AuthedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(DocumentUpload)) body: z.infer<typeof DocumentUpload>,
+  ) {
     return this.drivers.requestDocumentUpload(id, body, requireAdmin(req).userId);
   }
 
@@ -103,14 +133,20 @@ export class AdminDriversController {
   @Put(':id/training')
   @AdminWrite()
   @ApiZodBody(Training)
-  training(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(Training)) body: z.infer<typeof Training>) {
+  training(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(Training)) body: z.infer<typeof Training>,
+  ) {
     return this.drivers.setTraining(id, body.items);
   }
 
   @Put(':id/vehicle')
   @AdminWrite()
   @ApiZodBody(AssignVehicle)
-  vehicle(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(AssignVehicle)) body: z.infer<typeof AssignVehicle>) {
+  vehicle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(AssignVehicle)) body: z.infer<typeof AssignVehicle>,
+  ) {
     return this.drivers.assignVehicle(id, body.vehicleId);
   }
 
@@ -132,7 +168,10 @@ export class AdminDriversController {
   @HttpCode(200)
   @AdminWrite()
   @ApiZodBody(Reason)
-  suspend(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(Reason)) body: z.infer<typeof Reason>) {
+  suspend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(Reason)) body: z.infer<typeof Reason>,
+  ) {
     return this.drivers.suspend(id, body.reason);
   }
 
@@ -140,7 +179,10 @@ export class AdminDriversController {
   @HttpCode(200)
   @SuperAdminOnly()
   @ApiZodBody(Reason)
-  reactivate(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(Reason)) body: z.infer<typeof Reason>) {
+  reactivate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(Reason)) body: z.infer<typeof Reason>,
+  ) {
     return this.drivers.reactivate(id, body.reason);
   }
 }
@@ -214,7 +256,12 @@ export class DriverSelfController {
 
 @Module({
   imports: [MediaModule],
-  controllers: [AdminDriversController, AdminDocumentsController, AdminVehiclesController, DriverSelfController],
+  controllers: [
+    AdminDriversController,
+    AdminDocumentsController,
+    AdminVehiclesController,
+    DriverSelfController,
+  ],
   providers: [DriversService],
   exports: [DriversService],
 })

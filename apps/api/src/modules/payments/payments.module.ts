@@ -1,3 +1,4 @@
+import { MessagingModule } from '../messaging/messaging.module';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import {
   Body,
@@ -25,7 +26,15 @@ import { PAYMENTS, type PaymentsAdapter } from '../../adapters/interfaces';
 import { FakePayments } from '../../adapters/fakes';
 import { PrismaService } from '../../common/prisma.service';
 import { fakeProvidersAllowed } from '../../common/env';
-import { AdminRead, AdminWrite, type AuthedRequest, Public, RateLimit, Roles, requireAdmin } from '../../common/auth/roles';
+import {
+  AdminRead,
+  AdminWrite,
+  type AuthedRequest,
+  Public,
+  RateLimit,
+  Roles,
+  requireAdmin,
+} from '../../common/auth/roles';
 import { ApiZodBody, ZodPipe } from '../../common/zod';
 import { QUEUES } from '../../queues/queues';
 import { BookingsModule } from '../bookings/bookings.module';
@@ -71,10 +80,15 @@ export class FakePaystackController {
   @HttpCode(200)
   @Public()
   @ApiExcludeEndpoint()
-  async complete(@Param('reference') reference: string, @Body(new ZodPipe(FakeComplete)) body: z.infer<typeof FakeComplete>) {
-    if (!fakeProvidersAllowed() || !(this.gateway instanceof FakePayments)) throw new NotFoundException();
+  async complete(
+    @Param('reference') reference: string,
+    @Body(new ZodPipe(FakeComplete)) body: z.infer<typeof FakeComplete>,
+  ) {
+    if (!fakeProvidersAllowed() || !(this.gateway instanceof FakePayments))
+      throw new NotFoundException();
     const hook = this.gateway.complete(reference, body.outcome);
-    if (!hook) throw new NotFoundException({ code: 'REFERENCE_UNKNOWN', message: 'No such fake payment.' });
+    if (!hook)
+      throw new NotFoundException({ code: 'REFERENCE_UNKNOWN', message: 'No such fake payment.' });
     return this.payments.receiveWebhook(hook.rawBody, hook.signature);
   }
 }
@@ -98,9 +112,17 @@ export class AdminPaymentsController {
   @Post('bookings/:id/refunds')
   @AdminWrite()
   @ApiZodBody(Refund)
-  refund(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(Refund)) body: z.infer<typeof Refund>) {
+  refund(
+    @Req() req: AuthedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(Refund)) body: z.infer<typeof Refund>,
+  ) {
     const a = requireAdmin(req);
-    return this.payments.refund({ bookingId: id, ...body, actor: { userId: a.userId, role: a.role } });
+    return this.payments.refund({
+      bookingId: id,
+      ...body,
+      actor: { userId: a.userId, role: a.role },
+    });
   }
 
   @Get('bookings/:id/refundable')
@@ -113,7 +135,9 @@ export class AdminPaymentsController {
   @Get('payments')
   @AdminRead()
   async list(@Query('status') status?: string) {
-    const s = ['PENDING', 'SUCCEEDED', 'FAILED', 'ABANDONED'].includes(status ?? '') ? (status as 'PENDING') : undefined;
+    const s = ['PENDING', 'SUCCEEDED', 'FAILED', 'ABANDONED'].includes(status ?? '')
+      ? (status as 'PENDING')
+      : undefined;
     const [intents, runs] = await Promise.all([
       this.prisma.paymentIntent.findMany({
         where: s ? { status: s } : {},
@@ -139,14 +163,18 @@ export class AdminPaymentsController {
   @HttpCode(200)
   @AdminWrite()
   reconcile(@Body() body: { day?: string }) {
-    const day = typeof body?.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : undefined;
+    const day =
+      typeof body?.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : undefined;
     return this.payments.reconcile('ops', day);
   }
 
   @Get('ledger/balances')
   @AdminRead()
   async balances() {
-    return { accounts: await this.ledger.balances(), trialBalance: await this.ledger.trialBalance() };
+    return {
+      accounts: await this.ledger.balances(),
+      trialBalance: await this.ledger.trialBalance(),
+    };
   }
 }
 
@@ -193,7 +221,9 @@ export class PaymentsSchedule {
       const now = lagosParts(new Date());
       if (now.hour !== (await this.config.get<number>(CONFIG.reconciliationHour))) return;
       const day = lagosParts(new Date(Date.now() - 86_400_000)).date;
-      const done = await this.prisma.reconciliationRun.findFirst({ where: { day, trigger: 'schedule' } });
+      const done = await this.prisma.reconciliationRun.findFirst({
+        where: { day, trigger: 'schedule' },
+      });
       if (done) return;
       await this.payments.reconcile('schedule', day);
     } catch (err) {
@@ -207,8 +237,13 @@ export class PaymentsSchedule {
 export class LedgerModule {}
 
 @Module({
-  imports: [BookingsModule],
-  controllers: [PaymentWebhookController, FakePaystackController, AdminPaymentsController, SystemPaymentsController],
+  imports: [BookingsModule, MessagingModule],
+  controllers: [
+    PaymentWebhookController,
+    FakePaystackController,
+    AdminPaymentsController,
+    SystemPaymentsController,
+  ],
   providers: [PaymentsService, PaymentsProcessor, PaymentsSchedule],
   exports: [PaymentsService],
 })

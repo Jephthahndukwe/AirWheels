@@ -13,7 +13,10 @@ export default async function NewBooking() {
         ← Bookings
       </Link>
       <h1 className="mb-2 mt-2 text-2xl font-bold">New phone or WhatsApp booking</h1>
-      <p className="mb-6 text-sm text-slate">The price comes from the live pricing rules. The booking waits for payment; send the traveller the Paystack link shown on the next page.</p>
+      <p className="mb-6 text-sm text-slate">
+        The price comes from the live pricing rules. The booking waits for payment; send the
+        traveller the Paystack link shown on the next page.
+      </p>
       <Card title="Booking">
         <OpsBookingForm />
       </Card>

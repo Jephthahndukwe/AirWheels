@@ -1,6 +1,9 @@
 import { Global, Logger, Module, type Provider } from '@nestjs/common';
 import { fakeProvidersAllowedEnv } from '../common/env';
+import { AfricasTalkingVoice } from './africastalking';
 import { PaystackPayments } from './paystack';
+import { TermiiSms } from './termii';
+import { WhatsAppCloud } from './whatsapp-cloud';
 import {
   FakeEmail,
   FakeFlightStatus,
@@ -43,11 +46,31 @@ export interface AdapterBinding {
 
 export const bindings: AdapterBinding[] = [
   { token: PAYMENTS, name: 'Paystack', fake: FakePayments, requiredEnv: ['PAYSTACK_SECRET_KEY'] },
-  { token: WHATSAPP, name: 'WhatsApp Cloud API', fake: FakeWhatsApp, requiredEnv: ['WHATSAPP_ACCESS_TOKEN'] },
-  { token: SMS, name: 'Termii', fake: FakeSms, requiredEnv: ['TERMII_API_KEY'] },
-  { token: VOICE, name: "Africa's Talking voice", fake: FakeVoice, requiredEnv: ['AFRICASTALKING_API_KEY'] },
+  {
+    token: WHATSAPP,
+    name: 'WhatsApp Cloud API',
+    fake: FakeWhatsApp,
+    requiredEnv: ['WHATSAPP_ACCESS_TOKEN'],
+  },
+  {
+    token: SMS,
+    name: 'Termii',
+    fake: FakeSms,
+    requiredEnv: ['TERMII_API_KEY', 'TERMII_SENDER_ID'],
+  },
+  {
+    token: VOICE,
+    name: "Africa's Talking voice",
+    fake: FakeVoice,
+    requiredEnv: ['AFRICASTALKING_API_KEY'],
+  },
   { token: MAPS, name: 'Google Maps', fake: FakeMaps, requiredEnv: ['GOOGLE_MAPS_API_KEY'] },
-  { token: FLIGHT_STATUS, name: 'AeroDataBox', fake: FakeFlightStatus, requiredEnv: ['AERODATABOX_API_KEY'] },
+  {
+    token: FLIGHT_STATUS,
+    name: 'AeroDataBox',
+    fake: FakeFlightStatus,
+    requiredEnv: ['AERODATABOX_API_KEY'],
+  },
   { token: KYC, name: 'KYC provider', fake: FakeKyc, requiredEnv: ['KYC_API_KEY'] },
   { token: EMAIL, name: 'Email', fake: FakeEmail, requiredEnv: ['EMAIL_API_KEY'] },
   { token: STORAGE, name: 'Object storage', fake: FakeStorage, requiredEnv: ['S3_ACCESS_KEY_ID'] },
@@ -55,7 +78,12 @@ export const bindings: AdapterBinding[] = [
 ];
 
 /** Live implementations register here as they are built (keyed by token). */
-export const live = new Map<symbol, new () => object>([[PAYMENTS, PaystackPayments]]);
+export const live = new Map<symbol, new () => object>([
+  [PAYMENTS, PaystackPayments],
+  [WHATSAPP, WhatsAppCloud],
+  [SMS, TermiiSms],
+  [VOICE, AfricasTalkingVoice],
+]);
 
 const log = new Logger('Adapters');
 
@@ -79,7 +107,8 @@ const providers: Provider[] = bindings.map((b) => ({
   provide: b.token,
   useFactory: () => {
     const choice = chooseAdapter(b, process.env);
-    if (choice.kind === 'fake' && process.env.ADAPTERS_MODE === 'live') log.warn(`${b.name}: live adapter unavailable, using fake`);
+    if (choice.kind === 'fake' && process.env.ADAPTERS_MODE === 'live')
+      log.warn(`${b.name}: live adapter unavailable, using fake`);
     return new choice.impl();
   },
 }));

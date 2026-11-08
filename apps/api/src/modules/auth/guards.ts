@@ -36,7 +36,11 @@ export function decideAccess(input: {
   if (!input.roles || input.roles.length === 0) return 'undeclared';
   if (!input.principalRole) return 'unauthenticated';
   // Finance is read-only (PRD 2.2), whatever a route declares, except its own sign-out.
-  if (input.principalRole === 'FINANCE' && !READ_METHODS.has(input.method.toUpperCase()) && !input.selfService) {
+  if (
+    input.principalRole === 'FINANCE' &&
+    !READ_METHODS.has(input.method.toUpperCase()) &&
+    !input.selfService
+  ) {
     return 'forbidden';
   }
   return input.roles.includes(input.principalRole) ? 'allow' : 'forbidden';
@@ -58,15 +62,25 @@ export class AuthGuard implements CanActivate {
     const targets = [ctx.getHandler(), ctx.getClass()];
     const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, targets) ?? false;
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, targets);
-    const selfService = this.reflector.getAllAndOverride<boolean>(SELF_SERVICE_KEY, targets) ?? false;
+    const selfService =
+      this.reflector.getAllAndOverride<boolean>(SELF_SERVICE_KEY, targets) ?? false;
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
 
     if (isPublic) return true;
     if (!roles?.length) {
-      throw new ForbiddenException({ code: 'ROUTE_NOT_DECLARED', message: 'This route has no access rule, so it is blocked.' });
+      throw new ForbiddenException({
+        code: 'ROUTE_NOT_DECLARED',
+        message: 'This route has no access rule, so it is blocked.',
+      });
     }
     const principal = await this.resolver.resolve(req);
-    const decision = decideAccess({ isPublic, roles, method: req.method, selfService, principalRole: principal?.role ?? null });
+    const decision = decideAccess({
+      isPublic,
+      roles,
+      method: req.method,
+      selfService,
+      principalRole: principal?.role ?? null,
+    });
     if (decision === 'unauthenticated') {
       throw new UnauthorizedException({ code: 'AUTH_REQUIRED', message: 'Sign in again.' });
     }
@@ -88,10 +102,10 @@ export class RateLimitGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     if (ctx.getType() !== 'http') return true;
-    const meta = this.reflector.getAllAndOverride<{ bucket: string; by: RateLimitBy }>(RATE_LIMIT_KEY, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
+    const meta = this.reflector.getAllAndOverride<{ bucket: string; by: RateLimitBy }>(
+      RATE_LIMIT_KEY,
+      [ctx.getHandler(), ctx.getClass()],
+    );
     if (!meta) return true;
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const p = req.principal;
@@ -108,7 +122,10 @@ export class RateLimitGuard implements CanActivate {
     if (!r.allowed) {
       res.setHeader('Retry-After', String(r.retryAfterSeconds));
       throw new HttpException(
-        { code: 'RATE_LIMITED', message: `Too many attempts. Try again in ${r.retryAfterSeconds} seconds.` },
+        {
+          code: 'RATE_LIMITED',
+          message: `Too many attempts. Try again in ${r.retryAfterSeconds} seconds.`,
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

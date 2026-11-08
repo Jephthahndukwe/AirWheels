@@ -31,13 +31,21 @@ export async function setToken(token: string | null) {
 export async function deviceId(): Promise<string> {
   const existing = await SecureStore.getItemAsync(DEVICE_KEY);
   if (existing) return existing;
-  const hex = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+  const hex = () =>
+    Math.floor(Math.random() * 0x10000)
+      .toString(16)
+      .padStart(4, '0');
   const id = `dev-${Date.now().toString(36)}-${hex()}${hex()}${hex()}${hex()}`;
   await SecureStore.setItemAsync(DEVICE_KEY, id);
   return id;
 }
 
-export async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<T> {
+export async function call<T>(
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+  auth = true,
+): Promise<T> {
   const token = auth ? await getToken() : null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15_000);
@@ -46,7 +54,10 @@ export async function call<T>(method: 'GET' | 'POST', path: string, body?: unkno
     res = await fetch(`${API_URL}${path}`, {
       method,
       signal: ctrl.signal,
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -54,9 +65,14 @@ export async function call<T>(method: 'GET' | 'POST', path: string, body?: unkno
   } finally {
     clearTimeout(timer);
   }
-  const data = (await res.json().catch(() => ({}))) as { code?: string; message?: string | string[] } & T;
+  const data = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    message?: string | string[];
+  } & T;
   if (!res.ok) {
-    const msg = Array.isArray(data.message) ? data.message.join(', ') : (data.message ?? 'Something went wrong.');
+    const msg = Array.isArray(data.message)
+      ? data.message.join(', ')
+      : (data.message ?? 'Something went wrong.');
     throw new ApiError(res.status, data.code ?? 'ERROR', msg);
   }
   return data;

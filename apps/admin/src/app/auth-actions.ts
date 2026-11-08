@@ -16,7 +16,11 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
   const r = await apiRaw('/v1/admin/auth/login', {
     method: 'POST',
     token: null,
-    body: { email: String(form.get('email') ?? ''), password: String(form.get('password') ?? ''), totp: String(form.get('totp') ?? '').replace(/\s/g, '') },
+    body: {
+      email: String(form.get('email') ?? ''),
+      password: String(form.get('password') ?? ''),
+      totp: String(form.get('totp') ?? '').replace(/\s/g, ''),
+    },
   });
   if (r.status !== 200) return { error: messageOf(r.data, 'Could not sign in.') };
   const d = r.data as { token: string; expiresAt: string };
@@ -26,11 +30,16 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
 
 export async function acceptInvite(_prev: FormState, form: FormData): Promise<FormState> {
   const password = String(form.get('password') ?? '');
-  if (password !== String(form.get('confirm') ?? '')) return { error: 'The two passwords do not match.' };
+  if (password !== String(form.get('confirm') ?? ''))
+    return { error: 'The two passwords do not match.' };
   const r = await apiRaw('/v1/admin/auth/invites/accept', {
     method: 'POST',
     token: null,
-    body: { token: String(form.get('token') ?? ''), password, totp: String(form.get('totp') ?? '').replace(/\s/g, '') },
+    body: {
+      token: String(form.get('token') ?? ''),
+      password,
+      totp: String(form.get('totp') ?? '').replace(/\s/g, ''),
+    },
   });
   if (r.status !== 200) return { error: messageOf(r.data, 'Could not finish setup.') };
   const d = r.data as { token: string; expiresAt: string };

@@ -33,12 +33,18 @@ export class RateLimitService implements OnModuleDestroy {
     return this.redis;
   }
 
-  async hit(bucket: string, id: string): Promise<{ allowed: boolean; retryAfterSeconds: number; limit: number; remaining: number }> {
+  async hit(
+    bucket: string,
+    id: string,
+  ): Promise<{ allowed: boolean; retryAfterSeconds: number; limit: number; remaining: number }> {
     const rules = await this.config.get<Record<string, RateLimitRule>>(CONFIG.rateLimits);
     const rule = rules[bucket];
     if (!rule) {
       // A missing bucket must not take a page down: allow, and say so loudly so ops add it.
-      this.log.error({ bucket }, `No rate limit configured for bucket "${bucket}" (config key ${CONFIG.rateLimits}); allowing`);
+      this.log.error(
+        { bucket },
+        `No rate limit configured for bucket "${bucket}" (config key ${CONFIG.rateLimits}); allowing`,
+      );
       return { allowed: true, retryAfterSeconds: 0, limit: 0, remaining: 0 };
     }
     const window = Math.floor(Date.now() / 1000 / rule.windowSeconds);
@@ -47,10 +53,19 @@ export class RateLimitService implements OnModuleDestroy {
       const r = this.client();
       const count = await r.incr(key);
       if (count === 1) await r.expire(key, rule.windowSeconds + 1);
-      const retryAfterSeconds = rule.windowSeconds - (Math.floor(Date.now() / 1000) % rule.windowSeconds);
-      return { allowed: count <= rule.limit, retryAfterSeconds, limit: rule.limit, remaining: Math.max(0, rule.limit - count) };
+      const retryAfterSeconds =
+        rule.windowSeconds - (Math.floor(Date.now() / 1000) % rule.windowSeconds);
+      return {
+        allowed: count <= rule.limit,
+        retryAfterSeconds,
+        limit: rule.limit,
+        remaining: Math.max(0, rule.limit - count),
+      };
     } catch (err) {
-      this.log.warn({ bucket, err: (err as Error).message }, 'Rate limit store unavailable; allowing request');
+      this.log.warn(
+        { bucket, err: (err as Error).message },
+        'Rate limit store unavailable; allowing request',
+      );
       return { allowed: true, retryAfterSeconds: 0, limit: rule.limit, remaining: rule.limit };
     }
   }

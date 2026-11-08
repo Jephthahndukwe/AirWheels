@@ -42,33 +42,77 @@ export interface PaymentsAdapter {
   }): Promise<{ authorizationUrl: string; reference: string }>;
   verify(reference: string): Promise<GatewayTransaction | null>;
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean;
-  refund(reference: string, amountKobo: number): Promise<{ refundId: string; status: 'processed' | 'pending' }>;
-  transfer(input: { recipientCode: string; amountKobo: number; reference: string }): Promise<{ transferId: string }>;
+  refund(
+    reference: string,
+    amountKobo: number,
+  ): Promise<{ refundId: string; status: 'processed' | 'pending' }>;
+  transfer(input: {
+    recipientCode: string;
+    amountKobo: number;
+    reference: string;
+  }): Promise<{ transferId: string }>;
   /** Transactions created in a time window, for reconciliation (PAY-06). */
   listTransactions(from: Date, to: Date): Promise<GatewayTransaction[]>;
 }
 
+/** A quick-reply button: `payload` comes back to us when tapped (TRV-12). */
+export interface ReplyButton {
+  payload: string;
+  title: string;
+}
+
+/** Delivery status and inbound messages, normalised from each provider's webhook. */
+export type DeliveryState = 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+export interface StatusUpdate {
+  providerMessageId: string;
+  status: DeliveryState;
+  error?: string;
+}
+export interface InboundMessage {
+  providerMessageId: string;
+  from: string; // E.164 with +
+  text?: string;
+  buttonPayload?: string;
+  /** The message this one replies to, when the provider says. */
+  contextId?: string;
+  at: Date;
+}
+
 /** WhatsApp Cloud API (TRV-01, TRV-12). */
 export interface WhatsAppAdapter {
+  readonly mode: 'live' | 'fake';
+  /** Approved template: allowed at any time. `params` follow the template's placeholders in order. */
   sendTemplate(input: {
     to: string;
     template: string;
     language: string;
-    variables: Record<string, string>;
-    buttons?: { id: string; title: string }[];
+    params: string[];
+    buttons?: ReplyButton[];
+    /** The rendered text. Not sent (Meta renders the approved template); fakes show it. */
+    text?: string;
   }): Promise<SendResult>;
+  /** Free-form with buttons: only inside the 24-hour window (PRD 7.3). */
+  sendInteractive(input: { to: string; body: string; buttons: ReplyButton[] }): Promise<SendResult>;
   sendText(to: string, body: string): Promise<SendResult>;
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean;
 }
 
-/** Termii or Africa's Talking (TRV-01 fallback). */
+/** Termii (TRV-01 fallback). */
 export interface SmsAdapter {
+  readonly mode: 'live' | 'fake';
   send(to: string, body: string): Promise<SendResult>;
+  verifyWebhookSignature(rawBody: Buffer, signature: string): boolean;
 }
 
-/** Masked calling (TRV-05, DRV-08). */
+/**
+ * Masked calling (TRV-05, DRV-08). The provider rings `from`; when they answer, our voice callback
+ * connects them to the other party, so neither sees the other's number.
+ */
 export interface VoiceAdapter {
-  bridgeCall(input: { from: string; to: string; legId: string }): Promise<{ callId: string }>;
+  readonly mode: 'live' | 'fake';
+  bridgeCall(input: { from: string; to: string; callLogId: string }): Promise<{ callId: string }>;
+  /** Checks the secret on a voice callback URL. */
+  verifyCallback(key: string | undefined): boolean;
 }
 
 export interface LatLng {
@@ -111,7 +155,11 @@ export interface FlightStatusResult {
 /** AeroDataBox backup flight status (FLT-03). */
 export interface FlightStatusAdapter {
   /** `airport` hints which end is ours (LOS), so a fake can answer either direction. */
-  lookup(flightNumber: string, date: string, hint?: { leg: 'DEPARTURE' | 'ARRIVAL'; airport: string }): Promise<FlightStatusResult | null>;
+  lookup(
+    flightNumber: string,
+    date: string,
+    hint?: { leg: 'DEPARTURE' | 'ARRIVAL'; airport: string },
+  ): Promise<FlightStatusResult | null>;
 }
 
 /** Smile ID, Dojah or Youverify (5.2). */
@@ -137,5 +185,10 @@ export interface StorageAdapter {
 
 /** Expo push for drivers. */
 export interface PushAdapter {
-  send(input: { to: string; title: string; body: string; data?: Record<string, unknown> }): Promise<SendResult>;
+  send(input: {
+    to: string;
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }): Promise<SendResult>;
 }

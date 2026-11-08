@@ -1,5 +1,18 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Body, Controller, Get, HttpCode, Injectable, Logger, Module, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Injectable,
+  Logger,
+  Module,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ApiTags } from '@nestjs/swagger';
 import type { BookingStatus } from '@prisma/client';
@@ -17,7 +30,19 @@ import { TravellerAccessModule } from '../traveller-access/traveller-access.modu
 import { type AfterConfirmJob, BookingStepsService } from './booking-steps';
 import { BookingsService } from './bookings.service';
 
-const STATUSES: BookingStatus[] = ['QUOTED', 'PENDING_PAYMENT', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'PAYMENT_FAILED', 'REJECTED', 'CANCELLING', 'CANCELLED', 'REFUNDING', 'REFUNDED'];
+const STATUSES: BookingStatus[] = [
+  'QUOTED',
+  'PENDING_PAYMENT',
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'PAYMENT_FAILED',
+  'REJECTED',
+  'CANCELLING',
+  'CANCELLED',
+  'REFUNDING',
+  'REFUNDED',
+];
 const Cancel = z.object({ reason: z.string().trim().min(3).max(500) });
 
 /** Bookings in the admin (ADM-05, ADM-06, BKG-08). */
@@ -32,7 +57,11 @@ export class AdminBookingsController {
   @Get()
   @AdminRead()
   list(@Query('limit') limit?: string, @Query('q') q?: string, @Query('status') status?: string) {
-    return this.bookings.list({ limit: Math.min(Number(limit) || 50, 200), search: q, status: STATUSES.find((s) => s === status) });
+    return this.bookings.list({
+      limit: Math.min(Number(limit) || 50, 200),
+      search: q,
+      status: STATUSES.find((s) => s === status),
+    });
   }
 
   @Get('stuck')
@@ -52,7 +81,11 @@ export class AdminBookingsController {
   @AdminWrite()
   async retry(@Param('id', ParseUUIDPipe) id: string) {
     const r = await this.bookings.retry(id);
-    await this.audit.record({ action: 'booking.retry_steps', entity: 'TransferBooking', entityId: id });
+    await this.audit.record({
+      action: 'booking.retry_steps',
+      entity: 'TransferBooking',
+      entityId: id,
+    });
     return r;
   }
 
@@ -60,10 +93,24 @@ export class AdminBookingsController {
   @HttpCode(200)
   @AdminWrite()
   @ApiZodBody(Cancel)
-  async cancel(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(Cancel)) body: z.infer<typeof Cancel>) {
+  async cancel(
+    @Req() req: AuthedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(Cancel)) body: z.infer<typeof Cancel>,
+  ) {
     const before = await this.bookings.detail(id);
-    const after = await this.bookings.cancelById(id, { role: 'OPS', id: requireAdmin(req).userId }, body.reason);
-    await this.audit.record({ action: 'booking.cancel', entity: 'TransferBooking', entityId: id, before: { status: before.status }, after: { status: after.status, reason: body.reason } });
+    const after = await this.bookings.cancelById(
+      id,
+      { role: 'OPS', id: requireAdmin(req).userId },
+      body.reason,
+    );
+    await this.audit.record({
+      action: 'booking.cancel',
+      entity: 'TransferBooking',
+      entityId: id,
+      before: { status: before.status },
+      after: { status: after.status, reason: body.reason },
+    });
     return { id, status: after.status };
   }
 }

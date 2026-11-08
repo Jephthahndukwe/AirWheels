@@ -28,7 +28,11 @@ function AddressSearch({ prefix }: { prefix: string }) {
         <ul className="mt-1 rounded-md border border-border bg-white text-sm">
           {results.map((p) => (
             <li key={p.placeId}>
-              <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-cloud" onClick={() => setPicked(p)}>
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left hover:bg-cloud"
+                onClick={() => setPicked(p)}
+              >
                 {p.description}
               </button>
             </li>
@@ -59,7 +63,10 @@ export function OpsBookingForm() {
       </div>
       {(['DEPARTURE', 'ARRIVAL'] as const).map((t) => (
         <fieldset key={t} className="grid grid-cols-4 gap-3 rounded-md border border-border p-3">
-          <legend className="px-1 text-sm font-semibold">{t === 'DEPARTURE' ? 'To the airport' : 'From the airport'} (leave the flight empty to skip)</legend>
+          <legend className="px-1 text-sm font-semibold">
+            {t === 'DEPARTURE' ? 'To the airport' : 'From the airport'} (leave the flight empty to
+            skip)
+          </legend>
           <Field label="Flight number" name={`${t}.flight`} placeholder="P47121" />
           <Field label="Date" name={`${t}.date`} type="date" defaultValue={tomorrow()} />
           <AddressSearch prefix={t} />
@@ -69,11 +76,40 @@ export function OpsBookingForm() {
         </fieldset>
       ))}
       <div className="grid grid-cols-5 gap-3">
-        <Field label="Passengers" name="passengers" type="number" min={1} max={7} defaultValue={1} required />
+        <Field
+          label="Passengers"
+          name="passengers"
+          type="number"
+          min={1}
+          max={7}
+          defaultValue={1}
+          required
+        />
         <Field label="Bags" name="bags" type="number" min={0} max={12} defaultValue={1} required />
-        <Field label="Child seats" name="childSeats" type="number" min={0} max={3} defaultValue={0} />
-        <Select label="Ride" name="rideType" options={[['PRIVATE', 'Private'], ['SHARED', 'Shared']]} />
-        <Select label="Plan" name="plan" options={[['STANDARD', 'Standard'], ['FLEX', 'Flex']]} />
+        <Field
+          label="Child seats"
+          name="childSeats"
+          type="number"
+          min={0}
+          max={3}
+          defaultValue={0}
+        />
+        <Select
+          label="Ride"
+          name="rideType"
+          options={[
+            ['PRIVATE', 'Private'],
+            ['SHARED', 'Shared'],
+          ]}
+        />
+        <Select
+          label="Plan"
+          name="plan"
+          options={[
+            ['STANDARD', 'Standard'],
+            ['FLEX', 'Flex'],
+          ]}
+        />
       </div>
       <Field label="Note for the audit log (optional)" name="note" />
       <Submit>Price it, create the booking and get a payment link</Submit>

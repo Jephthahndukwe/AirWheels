@@ -26,7 +26,10 @@ async function apiHealthy() {
 
 export default async function Overview() {
   const me = await requireMe();
-  const [healthy, alerts] = await Promise.all([apiHealthy(), api<Alert[]>('/v1/admin/alerts?status=OPEN')]);
+  const [healthy, alerts] = await Promise.all([
+    apiHealthy(),
+    api<Alert[]>('/v1/admin/alerts?status=OPEN'),
+  ]);
   return (
     <div className="max-w-5xl">
       <h1 className="mb-6 text-2xl font-bold">Overview</h1>
@@ -51,11 +54,14 @@ export default async function Overview() {
             {alerts.map((a) => (
               <li key={a.id} className="flex items-start justify-between gap-4 py-3 text-sm">
                 <div>
-                  <Badge tone="bad">{a.type.replaceAll('_', ' ').toLowerCase()}</Badge> <span className="text-slate">{lagosTime(a.createdAt)}</span>
+                  <Badge tone="bad">{a.type.replaceAll('_', ' ').toLowerCase()}</Badge>{' '}
+                  <span className="text-slate">{lagosTime(a.createdAt)}</span>
                   <p className="mt-1">{a.message}</p>
                   {a.legId && <p className="font-mono text-xs text-slate">leg {a.legId}</p>}
                 </div>
-                {can.write(me) && <ActionButton action={resolveAlert.bind(null, a.id)} label="Resolve" />}
+                {can.write(me) && (
+                  <ActionButton action={resolveAlert.bind(null, a.id)} label="Resolve" />
+                )}
               </li>
             ))}
           </ul>
@@ -64,7 +70,9 @@ export default async function Overview() {
 
       <p className="text-sm">
         API status:{' '}
-        <span className={healthy ? 'font-semibold text-green-700' : 'font-semibold text-coral'}>{healthy ? 'healthy' : 'unreachable'}</span>
+        <span className={healthy ? 'font-semibold text-green-700' : 'font-semibold text-coral'}>
+          {healthy ? 'healthy' : 'unreachable'}
+        </span>
       </p>
     </div>
   );

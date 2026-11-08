@@ -13,8 +13,17 @@ export class AlertsService {
     private readonly audit: AuditService,
   ) {}
 
-  async raise(input: { type: string; message: string; bookingId?: string; legId?: string; driverId?: string; data?: object }) {
-    const alert = await this.prisma.opsAlert.create({ data: { ...input, data: input.data as Prisma.InputJsonValue | undefined } });
+  async raise(input: {
+    type: string;
+    message: string;
+    bookingId?: string;
+    legId?: string;
+    driverId?: string;
+    data?: object;
+  }) {
+    const alert = await this.prisma.opsAlert.create({
+      data: { ...input, data: input.data as Prisma.InputJsonValue | undefined },
+    });
     this.realtime.emit('ops', 'alert.created', alert);
     return alert;
   }
@@ -37,12 +46,19 @@ export class AlertsService {
 
   async resolve(id: string, resolvedById: string) {
     const before = await this.prisma.opsAlert.findUnique({ where: { id } });
-    if (!before) throw new NotFoundException({ code: 'ALERT_NOT_FOUND', message: 'No such alert.' });
+    if (!before)
+      throw new NotFoundException({ code: 'ALERT_NOT_FOUND', message: 'No such alert.' });
     const after = await this.prisma.opsAlert.update({
       where: { id },
       data: { status: 'RESOLVED', resolvedAt: new Date(), resolvedById },
     });
-    await this.audit.record({ action: 'alert.resolve', entity: 'OpsAlert', entityId: id, before: { status: before.status }, after: { status: after.status } });
+    await this.audit.record({
+      action: 'alert.resolve',
+      entity: 'OpsAlert',
+      entityId: id,
+      before: { status: before.status },
+      after: { status: after.status },
+    });
     return after;
   }
 }

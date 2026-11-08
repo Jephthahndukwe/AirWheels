@@ -19,7 +19,13 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { encrypt } from '../../common/crypto';
 import { PrismaService } from '../../common/prisma.service';
-import { AdminRead, type AuthedRequest, Public, SuperAdminOnly, requireAdmin } from '../../common/auth/roles';
+import {
+  AdminRead,
+  type AuthedRequest,
+  Public,
+  SuperAdminOnly,
+  requireAdmin,
+} from '../../common/auth/roles';
 import { ApiZodBody, ZodPipe } from '../../common/zod';
 import { AuditService } from '../audit/audit.service';
 import { validIpEntry } from '../auth/principal.resolver';
@@ -94,7 +100,14 @@ export class AirlineCredentialsService {
   list() {
     return this.prisma.airline.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, code: true, serviceBrandName: true, status: true, _count: { select: { credentials: { where: { status: 'ACTIVE' } } } } },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        serviceBrandName: true,
+        status: true,
+        _count: { select: { credentials: { where: { status: 'ACTIVE' } } } },
+      },
     });
   }
 
@@ -117,7 +130,11 @@ export class AirlineCredentialsService {
 
   private checkIps(ips: string[]) {
     const bad = ips.filter((ip) => !validIpEntry(ip));
-    if (bad.length) throw new BadRequestException({ code: 'IP_INVALID', message: `Not an IP address or CIDR range: ${bad.join(', ')}` });
+    if (bad.length)
+      throw new BadRequestException({
+        code: 'IP_INVALID',
+        message: `Not an IP address or CIDR range: ${bad.join(', ')}`,
+      });
   }
 
   private async issue(airlineId: string, allowedIps: string[], createdById: string) {
@@ -133,20 +150,33 @@ export class AirlineCredentialsService {
     await this.detail(airlineId);
     this.checkIps(allowedIps);
     const { credential, secret } = await this.issue(airlineId, allowedIps, createdById);
-    await this.audit.record({ action: 'airline.credential_create', entity: 'AirlineCredential', entityId: credential.id, after: credentialView(credential) });
-    return { ...credentialView(credential), secret, note: 'Copy the secret now. It is not shown again.' };
+    await this.audit.record({
+      action: 'airline.credential_create',
+      entity: 'AirlineCredential',
+      entityId: credential.id,
+      after: credentialView(credential),
+    });
+    return {
+      ...credentialView(credential),
+      secret,
+      note: 'Copy the secret now. It is not shown again.',
+    };
   }
 
   /** New key pair; the old one keeps working for the configured grace period so the airline can switch. */
   async rotate(credentialId: string, createdById: string) {
     const old = await this.prisma.airlineCredential.findUnique({ where: { id: credentialId } });
-    if (!old || old.status !== 'ACTIVE') throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such active key.' });
+    if (!old || old.status !== 'ACTIVE')
+      throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such active key.' });
     const graceHours = await this.config.get<number>(CONFIG.credentialRotationGraceHours);
     const { credential, secret } = await this.issue(old.airlineId, old.allowedIps, createdById);
     const oldExpiresAt = new Date(Date.now() + graceHours * 3_600_000);
     const oldAfter = await this.prisma.airlineCredential.update({
       where: { id: old.id },
-      data: { rotatedAt: new Date(), expiresAt: old.expiresAt && old.expiresAt < oldExpiresAt ? old.expiresAt : oldExpiresAt },
+      data: {
+        rotatedAt: new Date(),
+        expiresAt: old.expiresAt && old.expiresAt < oldExpiresAt ? old.expiresAt : oldExpiresAt,
+      },
     });
     await this.audit.record({
       action: 'airline.credential_rotate',
@@ -155,23 +185,48 @@ export class AirlineCredentialsService {
       before: credentialView(old),
       after: { old: credentialView(oldAfter), new: credentialView(credential) },
     });
-    return { ...credentialView(credential), secret, oldKeyExpiresAt: oldAfter.expiresAt, note: 'Copy the secret now. It is not shown again.' };
+    return {
+      ...credentialView(credential),
+      secret,
+      oldKeyExpiresAt: oldAfter.expiresAt,
+      note: 'Copy the secret now. It is not shown again.',
+    };
   }
 
   async revoke(credentialId: string) {
     const before = await this.prisma.airlineCredential.findUnique({ where: { id: credentialId } });
-    if (!before) throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such key.' });
-    const after = await this.prisma.airlineCredential.update({ where: { id: credentialId }, data: { status: 'REVOKED', revokedAt: new Date() } });
-    await this.audit.record({ action: 'airline.credential_revoke', entity: 'AirlineCredential', entityId: credentialId, before: credentialView(before), after: credentialView(after) });
+    if (!before)
+      throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such key.' });
+    const after = await this.prisma.airlineCredential.update({
+      where: { id: credentialId },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+    await this.audit.record({
+      action: 'airline.credential_revoke',
+      entity: 'AirlineCredential',
+      entityId: credentialId,
+      before: credentialView(before),
+      after: credentialView(after),
+    });
     return credentialView(after);
   }
 
   async setIps(credentialId: string, allowedIps: string[]) {
     this.checkIps(allowedIps);
     const before = await this.prisma.airlineCredential.findUnique({ where: { id: credentialId } });
-    if (!before) throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such key.' });
-    const after = await this.prisma.airlineCredential.update({ where: { id: credentialId }, data: { allowedIps } });
-    await this.audit.record({ action: 'airline.credential_ips', entity: 'AirlineCredential', entityId: credentialId, before: { allowedIps: before.allowedIps }, after: { allowedIps } });
+    if (!before)
+      throw new NotFoundException({ code: 'CREDENTIAL_NOT_FOUND', message: 'No such key.' });
+    const after = await this.prisma.airlineCredential.update({
+      where: { id: credentialId },
+      data: { allowedIps },
+    });
+    await this.audit.record({
+      action: 'airline.credential_ips',
+      entity: 'AirlineCredential',
+      entityId: credentialId,
+      before: { allowedIps: before.allowedIps },
+      after: { allowedIps },
+    });
     return credentialView(after);
   }
 }
@@ -197,7 +252,11 @@ export class AdminAirlinesController {
   @Post(':id/credentials')
   @SuperAdminOnly()
   @ApiZodBody(CreateCredential)
-  create(@Req() req: AuthedRequest, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(CreateCredential)) body: z.infer<typeof CreateCredential>) {
+  create(
+    @Req() req: AuthedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(CreateCredential)) body: z.infer<typeof CreateCredential>,
+  ) {
     return this.creds.create(id, body.allowedIps, requireAdmin(req).userId);
   }
 
@@ -218,7 +277,10 @@ export class AdminAirlinesController {
   @Put('credentials/:credId/ips')
   @SuperAdminOnly()
   @ApiZodBody(UpdateIps)
-  ips(@Param('credId', ParseUUIDPipe) credId: string, @Body(new ZodPipe(UpdateIps)) body: z.infer<typeof UpdateIps>) {
+  ips(
+    @Param('credId', ParseUUIDPipe) credId: string,
+    @Body(new ZodPipe(UpdateIps)) body: z.infer<typeof UpdateIps>,
+  ) {
     return this.creds.setIps(credId, body.allowedIps);
   }
 }

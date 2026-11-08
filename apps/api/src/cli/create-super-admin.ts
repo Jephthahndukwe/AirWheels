@@ -30,14 +30,24 @@ async function main() {
     const prisma = app.get(PrismaService);
     const existing = await prisma.adminProfile.count({ where: { role: 'SUPER_ADMIN' } });
     if (existing > 0) {
-      console.error('A super admin already exists. Invite more staff from the admin dashboard (Staff and roles).');
+      console.error(
+        'A super admin already exists. Invite more staff from the admin dashboard (Staff and roles).',
+      );
       process.exitCode = 1;
       return;
     }
-    const invite = await app.get(AdminAuthService).createInvite({ email, name, role: 'SUPER_ADMIN' });
+    const invite = await app
+      .get(AdminAuthService)
+      .createInvite({ email, name, role: 'SUPER_ADMIN' });
     const link = (invite as { devLink?: string }).devLink;
-    console.log(`Super admin invite created for ${invite.email}. It expires ${invite.expiresAt.toISOString()}.`);
-    console.log(link ? `Open this link to finish setup:\n${link}` : 'The setup link was emailed to that address.');
+    console.log(
+      `Super admin invite created for ${invite.email}. It expires ${invite.expiresAt.toISOString()}.`,
+    );
+    console.log(
+      link
+        ? `Open this link to finish setup:\n${link}`
+        : 'The setup link was emailed to that address.',
+    );
   } finally {
     await app.close();
   }

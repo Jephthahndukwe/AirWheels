@@ -3,20 +3,46 @@ import type { Airline } from '@prisma/client';
 import type { Request } from 'express';
 
 /** Every role that can call the API (PRD 2.1). Travellers use public, token-scoped routes. */
-export const ROLES = ['DRIVER', 'OPS_AGENT', 'SUPER_ADMIN', 'FINANCE', 'PARTNER', 'SYSTEM'] as const;
+export const ROLES = [
+  'DRIVER',
+  'OPS_AGENT',
+  'SUPER_ADMIN',
+  'FINANCE',
+  'PARTNER',
+  'SYSTEM',
+] as const;
 export type Role = (typeof ROLES)[number];
 export type AdminRoleName = 'OPS_AGENT' | 'SUPER_ADMIN' | 'FINANCE';
 
 export type Principal =
-  | { kind: 'admin'; role: AdminRoleName; userId: string; adminId: string; sessionId: string; email: string; name: string }
-  | { kind: 'driver'; role: 'DRIVER'; userId: string; driverId: string; sessionId: string; phone: string }
+  | {
+      kind: 'admin';
+      role: AdminRoleName;
+      userId: string;
+      adminId: string;
+      sessionId: string;
+      email: string;
+      name: string;
+    }
+  | {
+      kind: 'driver';
+      role: 'DRIVER';
+      userId: string;
+      driverId: string;
+      sessionId: string;
+      phone: string;
+    }
   | { kind: 'partner'; role: 'PARTNER'; airline: Airline; keyId: string }
   | { kind: 'system'; role: 'SYSTEM' };
 
 export type AdminPrincipal = Extract<Principal, { kind: 'admin' }>;
 export type DriverPrincipal = Extract<Principal, { kind: 'driver' }>;
 
-export type AuthedRequest = Request & { principal?: Principal; airline?: Airline; rawBody?: Buffer };
+export type AuthedRequest = Request & {
+  principal?: Principal;
+  airline?: Airline;
+  rawBody?: Buffer;
+};
 
 export const ROLES_KEY = 'aw:roles';
 export const PUBLIC_KEY = 'aw:public';
@@ -45,9 +71,11 @@ export const SuperAdminOnly = () => Roles('SUPER_ADMIN');
 
 /** Rate limit bucket for a route (ACC-09). Limits live in config under `rateLimits`. */
 export type RateLimitBy = 'ip' | 'partner' | 'principal';
-export const RateLimit = (bucket: string, by: RateLimitBy = 'ip') => SetMetadata(RATE_LIMIT_KEY, { bucket, by });
+export const RateLimit = (bucket: string, by: RateLimitBy = 'ip') =>
+  SetMetadata(RATE_LIMIT_KEY, { bucket, by });
 
-export const clientIp = (req: Request): string | undefined => req.ip ?? req.socket?.remoteAddress ?? undefined;
+export const clientIp = (req: Request): string | undefined =>
+  req.ip ?? req.socket?.remoteAddress ?? undefined;
 
 export function requireAdmin(req: AuthedRequest): AdminPrincipal {
   if (req.principal?.kind !== 'admin') throw new Error('Admin principal expected');

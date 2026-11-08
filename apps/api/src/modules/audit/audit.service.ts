@@ -24,14 +24,20 @@ interface AuditContext {
 
 const als = new AsyncLocalStorage<AuditContext>();
 
-const actorOf = (p?: Principal): { actorId?: string; actorRole: ActorRole; actorLabel?: string } => {
+const actorOf = (
+  p?: Principal,
+): { actorId?: string; actorRole: ActorRole; actorLabel?: string } => {
   switch (p?.kind) {
     case 'admin':
       return { actorId: p.userId, actorRole: 'OPS', actorLabel: `${p.email} (${p.role})` };
     case 'driver':
       return { actorId: p.userId, actorRole: 'DRIVER', actorLabel: p.phone };
     case 'partner':
-      return { actorId: p.airline.id, actorRole: 'SYSTEM', actorLabel: `airline ${p.airline.code}` };
+      return {
+        actorId: p.airline.id,
+        actorRole: 'SYSTEM',
+        actorLabel: `airline ${p.airline.code}`,
+      };
     default:
       return { actorRole: 'SYSTEM', actorLabel: 'system' };
   }
@@ -44,7 +50,10 @@ export function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, SECRET_FIELDS.test(k) ? '[redacted]' : redact(v)]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        SECRET_FIELDS.test(k) ? '[redacted]' : redact(v),
+      ]),
     );
   }
   return value;
@@ -79,8 +88,10 @@ export class AuditService {
         actorRole: input.actorRole ?? actor.actorRole,
         actorLabel: input.actorLabel ?? actor.actorLabel,
         ip: input.ip ?? ctx?.ip,
-        before: input.before === undefined ? undefined : (redact(input.before) as Prisma.InputJsonValue),
-        after: input.after === undefined ? undefined : (redact(input.after) as Prisma.InputJsonValue),
+        before:
+          input.before === undefined ? undefined : (redact(input.before) as Prisma.InputJsonValue),
+        after:
+          input.after === undefined ? undefined : (redact(input.after) as Prisma.InputJsonValue),
       },
     });
   }
@@ -100,7 +111,9 @@ export class AuditService {
       ...(q.entityId ? { entityId: q.entityId } : {}),
       ...(q.action ? { action: { contains: q.action, mode: 'insensitive' } } : {}),
       ...(q.actor ? { actorLabel: { contains: q.actor, mode: 'insensitive' } } : {}),
-      ...(q.from || q.to ? { time: { ...(q.from ? { gte: q.from } : {}), ...(q.to ? { lte: q.to } : {}) } } : {}),
+      ...(q.from || q.to
+        ? { time: { ...(q.from ? { gte: q.from } : {}), ...(q.to ? { lte: q.to } : {}) } }
+        : {}),
     };
     const rows = await this.prisma.auditLog.findMany({
       where,
@@ -110,8 +123,15 @@ export class AuditService {
     });
     const more = rows.length > q.limit;
     const items = more ? rows.slice(0, q.limit) : rows;
-    const entities = await this.prisma.auditLog.findMany({ distinct: ['entity'], select: { entity: true } });
-    return { items, nextCursor: more ? items[items.length - 1]!.id : null, entities: entities.map((e) => e.entity).sort() };
+    const entities = await this.prisma.auditLog.findMany({
+      distinct: ['entity'],
+      select: { entity: true },
+    });
+    return {
+      items,
+      nextCursor: more ? items[items.length - 1]!.id : null,
+      entities: entities.map((e) => e.entity).sort(),
+    };
   }
 }
 
@@ -127,7 +147,8 @@ export class AuditInterceptor implements NestInterceptor {
     if (ctx.getType() !== 'http') return next.handle();
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const store: AuditContext = { principal: req.principal, ip: clientIp(req), recorded: false };
-    const isAdminWrite = req.principal?.kind === 'admin' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+    const isAdminWrite =
+      req.principal?.kind === 'admin' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     return new Observable((sub) =>
       als.run(store, () =>
         next
@@ -175,5 +196,9 @@ export class AdminAuditController {
 }
 
 @Global()
-@Module({ controllers: [AdminAuditController], providers: [AuditService, AuditInterceptor], exports: [AuditService, AuditInterceptor] })
+@Module({
+  controllers: [AdminAuditController],
+  providers: [AuditService, AuditInterceptor],
+  exports: [AuditService, AuditInterceptor],
+})
 export class AuditModule {}

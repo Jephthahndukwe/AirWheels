@@ -25,7 +25,8 @@ export function departurePickupTime(i: DepartureTimingInput): Date {
     minutes(i.travelMinutes) -
     minutes(i.safetyMarginMinutes);
   const localHour = new Date(base + minutes(i.utcOffsetMinutes)).getUTCHours();
-  const extra = localHour < i.earlyMorningBeforeHour ? minutes(i.earlyMorningExtraMarginMinutes) : 0;
+  const extra =
+    localHour < i.earlyMorningBeforeHour ? minutes(i.earlyMorningExtraMarginMinutes) : 0;
   return new Date(base - extra);
 }
 

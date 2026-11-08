@@ -43,15 +43,27 @@ describe('TOTP (RFC 6238)', () => {
 
 describe('session tokens', () => {
   it('verifies its own signature and expiry', () => {
-    const t = signToken({ sid: 's1', sub: 'u1', typ: 'admin', exp: Math.floor(Date.now() / 1000) + 60 });
+    const t = signToken({
+      sid: 's1',
+      sub: 'u1',
+      typ: 'admin',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
     expect(verifyToken(t)?.sid).toBe('s1');
     expect(verifyToken(t, Date.now() + 120_000)).toBeNull();
   });
 
   it('rejects a tampered payload or a foreign key', () => {
-    const t = signToken({ sid: 's1', sub: 'u1', typ: 'driver', exp: Math.floor(Date.now() / 1000) + 60 });
+    const t = signToken({
+      sid: 's1',
+      sub: 'u1',
+      typ: 'driver',
+      exp: Math.floor(Date.now() / 1000) + 60,
+    });
     const [h, , s] = t.split('.');
-    const forged = Buffer.from(JSON.stringify({ sid: 's2', sub: 'u1', typ: 'admin', exp: 9e9 })).toString('base64url');
+    const forged = Buffer.from(
+      JSON.stringify({ sid: 's2', sub: 'u1', typ: 'admin', exp: 9e9 }),
+    ).toString('base64url');
     expect(verifyToken(`${h}.${forged}.${s}`)).toBeNull();
     process.env.JWT_SECRET = 'k'.repeat(64);
     expect(verifyToken(t)).toBeNull();
@@ -72,7 +84,8 @@ describe('password and PIN hashing', () => {
     expect(passwordProblem('short1')).not.toBeNull();
     expect(passwordProblem('alllowercaseletters')).not.toBeNull();
     expect(passwordProblem('Long-enough-pass1')).toBeNull();
-    for (const bad of ['12345', '111111', '123456', '987654', 'abcdef']) expect(pinProblem(bad)).not.toBeNull();
+    for (const bad of ['12345', '111111', '123456', '987654', 'abcdef'])
+      expect(pinProblem(bad)).not.toBeNull();
     expect(pinProblem('482913')).toBeNull();
   });
 });
@@ -80,17 +93,55 @@ describe('password and PIN hashing', () => {
 describe('access decision (PRD 2.2)', () => {
   const all: (Role | null)[] = [...ROLES, null];
   it('blocks a route with no declared roles for everyone', () => {
-    for (const r of all) expect(decideAccess({ isPublic: false, roles: undefined, method: 'GET', selfService: false, principalRole: r })).toBe('undeclared');
+    for (const r of all)
+      expect(
+        decideAccess({
+          isPublic: false,
+          roles: undefined,
+          method: 'GET',
+          selfService: false,
+          principalRole: r,
+        }),
+      ).toBe('undeclared');
   });
   it('requires sign-in, then the role', () => {
-    expect(decideAccess({ isPublic: false, roles: ['DRIVER'], method: 'GET', selfService: false, principalRole: null })).toBe('unauthenticated');
-    expect(decideAccess({ isPublic: false, roles: ['DRIVER'], method: 'GET', selfService: false, principalRole: 'OPS_AGENT' })).toBe('forbidden');
-    expect(decideAccess({ isPublic: false, roles: ['DRIVER'], method: 'GET', selfService: false, principalRole: 'DRIVER' })).toBe('allow');
+    expect(
+      decideAccess({
+        isPublic: false,
+        roles: ['DRIVER'],
+        method: 'GET',
+        selfService: false,
+        principalRole: null,
+      }),
+    ).toBe('unauthenticated');
+    expect(
+      decideAccess({
+        isPublic: false,
+        roles: ['DRIVER'],
+        method: 'GET',
+        selfService: false,
+        principalRole: 'OPS_AGENT',
+      }),
+    ).toBe('forbidden');
+    expect(
+      decideAccess({
+        isPublic: false,
+        roles: ['DRIVER'],
+        method: 'GET',
+        selfService: false,
+        principalRole: 'DRIVER',
+      }),
+    ).toBe('allow');
   });
   it('keeps finance read-only even on a route that lists it, except sign-out', () => {
-    const base = { isPublic: false, roles: ['FINANCE', 'OPS_AGENT'] as Role[], principalRole: 'FINANCE' as Role };
+    const base = {
+      isPublic: false,
+      roles: ['FINANCE', 'OPS_AGENT'] as Role[],
+      principalRole: 'FINANCE' as Role,
+    };
     expect(decideAccess({ ...base, method: 'GET', selfService: false })).toBe('allow');
-    for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) expect(decideAccess({ ...base, method: m, selfService: false })).toBe('forbidden');
+    for (const m of ['POST', 'PUT', 'PATCH', 'DELETE'])
+      expect(decideAccess({ ...base, method: m, selfService: false })).toBe('forbidden');
     expect(decideAccess({ ...base, method: 'POST', selfService: true })).toBe('allow');
   });
 });
@@ -106,7 +157,8 @@ describe('airline IP allow-lists', () => {
   it('validates entries', () => {
     expect(validIpEntry('10.0.0.0/8')).toBe(true);
     expect(validIpEntry('2001:db8::/32')).toBe(true);
-    for (const bad of ['10.0.0.0/33', 'example.com', '1.2.3.4/8/1', '']) expect(validIpEntry(bad)).toBe(false);
+    for (const bad of ['10.0.0.0/33', 'example.com', '1.2.3.4/8/1', ''])
+      expect(validIpEntry(bad)).toBe(false);
   });
 });
 

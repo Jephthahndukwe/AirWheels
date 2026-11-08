@@ -12,7 +12,11 @@ import { brand } from '@/theme';
 initObservability();
 
 export default function RootLayout() {
-  const [loaded] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
+  const [loaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+  });
   if (!loaded) return null;
   return (
     <>
@@ -28,7 +32,10 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="activate" options={{ title: 'Activate' }} />
         <Stack.Screen name="login" options={{ title: 'Log in' }} />
-        <Stack.Screen name="home" options={{ title: 'Airwheels Driver', headerBackVisible: false }} />
+        <Stack.Screen
+          name="home"
+          options={{ title: 'Airwheels Driver', headerBackVisible: false }}
+        />
       </Stack>
     </>
   );

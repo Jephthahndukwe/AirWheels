@@ -23,7 +23,9 @@ export default async function Settings() {
     <div className="max-w-6xl">
       <h1 className="mb-2 text-2xl font-bold">Settings</h1>
       <p className="mb-6 text-sm text-slate">
-        {edit ? 'Values are JSON and must keep the same shape. Each save is a new version and goes in the ' : 'Only super admins can change these. Changes are in the '}
+        {edit
+          ? 'Values are JSON and must keep the same shape. Each save is a new version and goes in the '
+          : 'Only super admins can change these. Changes are in the '}
         <Link href="/audit?entity=ConfigEntry" className="underline">
           audit log
         </Link>
@@ -38,11 +40,22 @@ export default async function Settings() {
             </Td>
             <Td>
               {edit ? (
-                <ActionForm action={saveConfig.bind(null, r.key)} className="flex items-start gap-2">
+                <ActionForm
+                  action={saveConfig.bind(null, r.key)}
+                  className="flex items-start gap-2"
+                >
                   <textarea
                     name="value"
-                    defaultValue={JSON.stringify(r.value, null, typeof r.value === 'object' ? 2 : 0)}
-                    rows={typeof r.value === 'object' && r.value !== null ? Math.min(12, JSON.stringify(r.value, null, 2).split('\n').length) : 1}
+                    defaultValue={JSON.stringify(
+                      r.value,
+                      null,
+                      typeof r.value === 'object' ? 2 : 0,
+                    )}
+                    rows={
+                      typeof r.value === 'object' && r.value !== null
+                        ? Math.min(12, JSON.stringify(r.value, null, 2).split('\n').length)
+                        : 1
+                    }
                     className="w-[28rem] rounded-md border border-border p-2 font-mono text-xs"
                   />
                   <Submit variant="secondary">Save</Submit>

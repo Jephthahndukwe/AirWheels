@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Formatting (Prettier, final newlines)
+        run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -33,7 +35,7 @@ jobs:
           git diff --exit-code -- packages/api-client || (echo "Run 'pnpm openapi' and commit the result." && exit 1)
 
   smoke:
-    name: Mock airline booking, M1 identity and M2 money flows (Postgres + Redis)
+    name: Mock airline booking, M1 identity, M2 money and M3 traveller flows (Postgres + Redis)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -69,6 +71,13 @@ jobs:
         run: pnpm --filter @airwheels/api flow:m1
       - name: M2 flow (quote, book, pay, webhooks, expired quote, refunds, ledger)
         run: pnpm --filter @airwheels/api flow:m2
+      - name: M3 flow (messages, SMS fallback, reply buttons, calls, tracking, change and cancel codes)
+        run: pnpm --filter @airwheels/api flow:m3
+      - name: Traveller journey in a browser (slow 3G, low-end phone, tracking page under 200 KB)
+        run: |
+          pnpm --filter @airwheels/web... build
+          pnpm --filter @airwheels/web exec playwright install --with-deps chromium
+          pnpm --filter @airwheels/web exec playwright test e2e/traveller.spec.ts
       - if: failure()
         run: cat api.log
 

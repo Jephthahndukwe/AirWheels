@@ -16,7 +16,8 @@ const b64 = (v: string) => Buffer.from(v).toString('base64url');
 
 const secret = (): string => {
   const s = process.env.JWT_SECRET;
-  if (!s || s.length < 32) throw new Error('JWT_SECRET is missing or shorter than 32 characters. Run `pnpm setup:env`.');
+  if (!s || s.length < 32)
+    throw new Error('JWT_SECRET is missing or shorter than 32 characters. Run `pnpm setup:env`.');
   return s;
 };
 

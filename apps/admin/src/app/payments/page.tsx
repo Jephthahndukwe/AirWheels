@@ -39,16 +39,25 @@ export default async function Payments() {
   const me = await requireMe();
   const [p, ledger] = await Promise.all([
     api<{ gateway: string; intents: Intent[]; reconciliation: Run[] }>('/v1/admin/payments'),
-    api<{ accounts: Account[]; trialBalance: { debitsKobo: number; creditsKobo: number; balanced: boolean } }>('/v1/admin/ledger/balances'),
+    api<{
+      accounts: Account[];
+      trialBalance: { debitsKobo: number; creditsKobo: number; balanced: boolean };
+    }>('/v1/admin/ledger/balances'),
   ]);
   return (
     <div className="max-w-6xl">
       <h1 className="mb-2 text-2xl font-bold">Payments</h1>
       <p className="mb-6 text-sm text-slate">
-        Gateway: <Badge tone={p.gateway === 'live' ? 'good' : 'warn'}>{p.gateway === 'live' ? 'Paystack' : 'fake (local only)'}</Badge>
+        Gateway:{' '}
+        <Badge tone={p.gateway === 'live' ? 'good' : 'warn'}>
+          {p.gateway === 'live' ? 'Paystack' : 'fake (local only)'}
+        </Badge>
       </p>
 
-      <Card title={`Ledger: ${ledger.trialBalance.balanced ? 'balanced' : 'NOT BALANCED'} (debits ${formatNaira(ledger.trialBalance.debitsKobo)}, credits ${formatNaira(ledger.trialBalance.creditsKobo)})`} done={ledger.trialBalance.balanced}>
+      <Card
+        title={`Ledger: ${ledger.trialBalance.balanced ? 'balanced' : 'NOT BALANCED'} (debits ${formatNaira(ledger.trialBalance.debitsKobo)}, credits ${formatNaira(ledger.trialBalance.creditsKobo)})`}
+        done={ledger.trialBalance.balanced}
+      >
         <Table head={['Account', 'Type', 'Balance']}>
           {ledger.accounts.map((a) => (
             <tr key={a.code}>
@@ -72,12 +81,16 @@ export default async function Payments() {
             <Submit variant="secondary">Reconcile now</Submit>
           </ActionForm>
         )}
-        <Table head={['Day', 'Run by', 'Checked', 'Settled', 'Failed', 'Mismatches']} empty={p.reconciliation.length === 0 && 'Runs daily at the hour set in Settings.'}>
+        <Table
+          head={['Day', 'Run by', 'Checked', 'Settled', 'Failed', 'Mismatches']}
+          empty={p.reconciliation.length === 0 && 'Runs daily at the hour set in Settings.'}
+        >
           {p.reconciliation.map((r) => (
             <tr key={r.id}>
               <Td>{r.day}</Td>
               <Td>
-                {r.trigger} <span className="block text-xs text-slate">{lagosTime(r.finishedAt)}</span>
+                {r.trigger}{' '}
+                <span className="block text-xs text-slate">{lagosTime(r.finishedAt)}</span>
               </Td>
               <Td>{r.checked}</Td>
               <Td>{r.settled}</Td>
@@ -89,7 +102,8 @@ export default async function Payments() {
                   <ul className="text-xs">
                     {r.mismatches.map((m, i) => (
                       <li key={i}>
-                        <Badge tone="bad">{m.kind.toLowerCase().replaceAll('_', ' ')}</Badge> <span className="font-mono">{m.reference}</span> {m.detail}
+                        <Badge tone="bad">{m.kind.toLowerCase().replaceAll('_', ' ')}</Badge>{' '}
+                        <span className="font-mono">{m.reference}</span> {m.detail}
                       </li>
                     ))}
                   </ul>
@@ -101,7 +115,10 @@ export default async function Payments() {
       </Card>
 
       <Card title="Recent payments">
-        <Table head={['Reference', 'Booking', 'Amount', 'Fee', 'Status', 'Started', 'Paid']} empty={p.intents.length === 0 && 'No payments yet.'}>
+        <Table
+          head={['Reference', 'Booking', 'Amount', 'Fee', 'Status', 'Started', 'Paid']}
+          empty={p.intents.length === 0 && 'No payments yet.'}
+        >
           {p.intents.map((i) => (
             <tr key={i.id}>
               <Td mono>{i.gatewayReference}</Td>
@@ -113,7 +130,11 @@ export default async function Payments() {
               <Td>{formatNaira(i.amountKobo)}</Td>
               <Td>{i.gatewayFeeKobo !== null ? formatNaira(i.gatewayFeeKobo) : '—'}</Td>
               <Td>
-                <Badge tone={i.status === 'SUCCEEDED' ? 'good' : i.status === 'PENDING' ? 'warn' : 'bad'}>{i.status.toLowerCase()}</Badge>
+                <Badge
+                  tone={i.status === 'SUCCEEDED' ? 'good' : i.status === 'PENDING' ? 'warn' : 'bad'}
+                >
+                  {i.status.toLowerCase()}
+                </Badge>
               </Td>
               <Td>{lagosTime(i.createdAt)}</Td>
               <Td>{lagosTime(i.paidAt)}</Td>

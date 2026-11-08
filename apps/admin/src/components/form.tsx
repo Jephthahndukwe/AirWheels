@@ -34,7 +34,13 @@ export function ActionForm({
   );
 }
 
-export function Submit({ children, variant = 'primary' }: { children: React.ReactNode; variant?: 'primary' | 'secondary' | 'danger' }) {
+export function Submit({
+  children,
+  variant = 'primary',
+}: {
+  children: React.ReactNode;
+  variant?: 'primary' | 'secondary' | 'danger';
+}) {
   const { pending } = useFormStatus();
   const styles = {
     primary: 'bg-coral text-white hover:opacity-90',
@@ -42,23 +48,37 @@ export function Submit({ children, variant = 'primary' }: { children: React.Reac
     danger: 'border border-coral text-coral hover:bg-coral/10',
   }[variant];
   return (
-    <button disabled={pending} className={`rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50 ${styles}`}>
+    <button
+      disabled={pending}
+      className={`rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50 ${styles}`}
+    >
       {pending ? 'Working…' : children}
     </button>
   );
 }
 
-export function Field({ label, hint, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
+export function Field({
+  label,
+  hint,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium">{label}</span>
-      <input {...props} className="w-full rounded-md border border-border bg-white px-3 py-2 outline-none focus:border-ink" />
+      <input
+        {...props}
+        className="w-full rounded-md border border-border bg-white px-3 py-2 outline-none focus:border-ink"
+      />
       {hint && <span className="mt-1 block text-xs text-slate">{hint}</span>}
     </label>
   );
 }
 
-export function Select({ label, options, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; options: [string, string][] }) {
+export function Select({
+  label,
+  options,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; options: [string, string][] }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium">{label}</span>

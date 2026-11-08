@@ -43,7 +43,9 @@ async function fetchConfig(api: string, airline: string): Promise<WidgetConfig> 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const r = await fetch(`${api}/v1/widget/config/${encodeURIComponent(airline)}`, { signal: ctrl.signal });
+    const r = await fetch(`${api}/v1/widget/config/${encodeURIComponent(airline)}`, {
+      signal: ctrl.signal,
+    });
     if (!r.ok) throw new Error(String(r.status));
     const body = (await r.json()) as WidgetConfig;
     return { ...body, theme: resolveTheme(body.theme) };
@@ -83,5 +85,8 @@ function render(host: HTMLElement, cfg: WidgetConfig, opts: MountOptions) {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 }

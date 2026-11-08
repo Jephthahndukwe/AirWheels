@@ -11,20 +11,25 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } 
  */
 const parseKey = (name: string, hex: string | undefined): Buffer | null => {
   if (!hex) return null;
-  if (!/^[0-9a-f]{64}$/i.test(hex)) throw new Error(`${name} must be 32 bytes of hex (64 characters).`);
+  if (!/^[0-9a-f]{64}$/i.test(hex))
+    throw new Error(`${name} must be 32 bytes of hex (64 characters).`);
   return Buffer.from(hex, 'hex');
 };
 
 export const currentKey = (): Buffer => {
   const k = parseKey('APP_ENCRYPTION_KEY', process.env.APP_ENCRYPTION_KEY);
-  if (!k) throw new Error('APP_ENCRYPTION_KEY is not set. Run `pnpm setup:env` locally, or set it in the secrets manager.');
+  if (!k)
+    throw new Error(
+      'APP_ENCRYPTION_KEY is not set. Run `pnpm setup:env` locally, or set it in the secrets manager.',
+    );
   return k;
 };
 
 const decryptionKeys = (): Buffer[] =>
-  [currentKey(), parseKey('APP_ENCRYPTION_KEY_PREVIOUS', process.env.APP_ENCRYPTION_KEY_PREVIOUS)].filter(
-    (k): k is Buffer => k !== null,
-  );
+  [
+    currentKey(),
+    parseKey('APP_ENCRYPTION_KEY_PREVIOUS', process.env.APP_ENCRYPTION_KEY_PREVIOUS),
+  ].filter((k): k is Buffer => k !== null);
 
 /** AES-256-GCM. Output: base64(iv | tag | ciphertext). */
 export function encrypt(plain: string): string {
@@ -70,4 +75,5 @@ export const sha256 = (value: string): string => createHash('sha256').update(val
 export const randomToken = (bytes = 24): string => randomBytes(bytes).toString('base64url');
 
 /** Numeric code of fixed length. */
-export const numericCode = (digits: number): string => String(randomInt(0, 10 ** digits)).padStart(digits, '0');
+export const numericCode = (digits: number): string =>
+  String(randomInt(0, 10 ** digits)).padStart(digits, '0');

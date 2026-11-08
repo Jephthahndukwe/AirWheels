@@ -25,6 +25,7 @@ import { AlertsService } from '../support/alerts.service';
 import { lagosParts } from '../dispatch/dispatch.module';
 import { refund as refundPosting } from './ledger';
 import { LedgerService } from './ledger.service';
+import { MessagingService } from '../messaging/messaging.service';
 
 export interface PaymentEventJob {
   reference: string;
@@ -54,18 +55,38 @@ export function redactWebhook(body: unknown): Prisma.InputJsonValue {
 }
 
 /** Decides which webhook events we act on and dedupes them by identity (PAY-02). */
-export function webhookIdentity(body: unknown): { event: string; reference: string | null; status: string | null; key: string; refundId?: string } {
+export function webhookIdentity(body: unknown): {
+  event: string;
+  reference: string | null;
+  status: string | null;
+  key: string;
+  refundId?: string;
+} {
   const b = (body ?? {}) as { event?: string; data?: Record<string, unknown> };
   const d = b.data ?? {};
   const t = (d.transaction ?? {}) as Record<string, unknown>;
   const event = String(b.event ?? 'unknown');
-  const reference = (d.reference as string | undefined) ?? (d.transaction_reference as string | undefined) ?? (t.reference as string | undefined) ?? null;
+  const reference =
+    (d.reference as string | undefined) ??
+    (d.transaction_reference as string | undefined) ??
+    (t.reference as string | undefined) ??
+    null;
   const status = (d.status as string | undefined) ?? null;
   const refundId = event.startsWith('refund.') && d.id !== undefined ? String(d.id) : undefined;
-  return { event, reference, status, refundId, key: `${event}:${reference ?? '-'}:${status ?? '-'}:${refundId ?? '-'}` };
+  return {
+    event,
+    reference,
+    status,
+    refundId,
+    key: `${event}:${reference ?? '-'}:${status ?? '-'}:${refundId ?? '-'}`,
+  };
 }
 
-const newReference = () => `AW-${randomBytes(9).toString('base64url').toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`;
+const newReference = () =>
+  `AW-${randomBytes(9)
+    .toString('base64url')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, 'X')}`;
 
 /**
  * Payments for our own channel (PRD 14.2): one payment intent per booking, Paystack checkout,
@@ -86,6 +107,7 @@ export class PaymentsService {
     private readonly audit: AuditService,
     @Inject(PAYMENTS) private readonly gateway: PaymentsAdapter,
     @InjectQueue(QUEUES.payments) private readonly queue: Queue,
+    private readonly messaging: MessagingService,
   ) {}
 
   get gatewayMode() {
@@ -102,26 +124,55 @@ export class PaymentsService {
    * pressing Pay twice returns the same checkout and can never charge twice.
    */
   async initialize(bookingId: string, callbackUrl: string) {
-    const b = await this.prisma.transferBooking.findUnique({ where: { id: bookingId }, include: { quote: true, traveller: true, paymentIntents: true } });
+    const b = await this.prisma.transferBooking.findUnique({
+      where: { id: bookingId },
+      include: { quote: true, traveller: true, paymentIntents: true },
+    });
     if (!b) throw new NotFoundException({ code: 'BOOKING_NOT_FOUND', message: 'No such booking.' });
-    if (b.collectedBy !== 'AIRWHEELS') throw new BadRequestException({ code: 'NOT_OUR_PAYMENT', message: 'The airline collects payment for this booking.' });
+    if (b.collectedBy !== 'AIRWHEELS')
+      throw new BadRequestException({
+        code: 'NOT_OUR_PAYMENT',
+        message: 'The airline collects payment for this booking.',
+      });
     if (b.status === 'CONFIRMED' || b.paymentIntents.some((i) => i.status === 'SUCCEEDED')) {
       return { status: 'PAID' as const, bookingId };
     }
     if (b.status !== 'PENDING_PAYMENT' && b.status !== 'PAYMENT_FAILED') {
-      throw new BadRequestException({ code: 'BOOKING_STATE', message: `This booking is ${b.status.toLowerCase()} and cannot be paid.` });
+      throw new BadRequestException({
+        code: 'BOOKING_STATE',
+        message: `This booking is ${b.status.toLowerCase()} and cannot be paid.`,
+      });
     }
     // The price was held until the quote expired. After that it cannot be paid (PRC-03).
     if (!b.quote || b.quote.expiresAt <= new Date()) {
-      throw new GoneException({ code: 'QUOTE_EXPIRED', message: 'This price is no longer held. Go back and get a new price.' });
+      throw new GoneException({
+        code: 'QUOTE_EXPIRED',
+        message: 'This price is no longer held. Go back and get a new price.',
+      });
     }
     const pending = b.paymentIntents.find((i) => i.status === 'PENDING' && i.authorizationUrl);
-    if (pending) return { status: 'PENDING' as const, authorizationUrl: pending.authorizationUrl!, reference: pending.gatewayReference };
+    if (pending)
+      return {
+        status: 'PENDING' as const,
+        authorizationUrl: pending.authorizationUrl!,
+        reference: pending.gatewayReference,
+      };
 
     const intent = await this.prisma.paymentIntent.create({
-      data: { bookingId, gatewayReference: newReference(), amountKobo: b.quote.totalKobo, idempotencyKey: `pay:${bookingId}:${b.paymentIntents.length + 1}` },
+      data: {
+        bookingId,
+        gatewayReference: newReference(),
+        amountKobo: b.quote.totalKobo,
+        idempotencyKey: `pay:${bookingId}:${b.paymentIntents.length + 1}`,
+      },
     });
-    if (b.status === 'PAYMENT_FAILED') await this.bookings.transition(bookingId, 'PENDING_PAYMENT', { role: 'TRAVELLER' }, 'retrying payment');
+    if (b.status === 'PAYMENT_FAILED')
+      await this.bookings.transition(
+        bookingId,
+        'PENDING_PAYMENT',
+        { role: 'TRAVELLER' },
+        'retrying payment',
+      );
     const init = await this.gateway.initialize({
       reference: intent.gatewayReference,
       amountKobo: intent.amountKobo,
@@ -129,8 +180,15 @@ export class PaymentsService {
       callbackUrl,
       metadata: { bookingId, reference: b.airlineBookingReference },
     });
-    await this.prisma.paymentIntent.update({ where: { id: intent.id }, data: { authorizationUrl: init.authorizationUrl } });
-    return { status: 'PENDING' as const, authorizationUrl: init.authorizationUrl, reference: intent.gatewayReference };
+    await this.prisma.paymentIntent.update({
+      where: { id: intent.id },
+      data: { authorizationUrl: init.authorizationUrl },
+    });
+    return {
+      status: 'PENDING' as const,
+      authorizationUrl: init.authorizationUrl,
+      reference: intent.gatewayReference,
+    };
   }
 
   /**
@@ -139,7 +197,10 @@ export class PaymentsService {
    */
   async receiveWebhook(rawBody: Buffer | undefined, signature: string | undefined) {
     if (!rawBody || !signature || !this.gateway.verifyWebhookSignature(rawBody, signature)) {
-      throw new UnauthorizedException({ code: 'SIGNATURE_INVALID', message: 'Webhook signature is not valid.' });
+      throw new UnauthorizedException({
+        code: 'SIGNATURE_INVALID',
+        message: 'Webhook signature is not valid.',
+      });
     }
     let body: unknown;
     try {
@@ -150,18 +211,36 @@ export class PaymentsService {
     const id = webhookIdentity(body);
     try {
       await this.prisma.paymentWebhookEvent.create({
-        data: { gateway: 'paystack', eventKey: id.key, event: id.event, reference: id.reference, payload: redactWebhook(body) },
+        data: {
+          gateway: 'paystack',
+          eventKey: id.key,
+          event: id.event,
+          reference: id.reference,
+          payload: redactWebhook(body),
+        },
       });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return { received: true, duplicate: true };
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
+        return { received: true, duplicate: true };
       throw e;
     }
     const handled = ['charge.success', 'charge.failed', 'refund.processed', 'refund.failed'];
     if (!handled.includes(id.event) || !id.reference) {
-      await this.prisma.paymentWebhookEvent.update({ where: { eventKey: id.key }, data: { processedAt: new Date(), result: 'ignored' } });
+      await this.prisma.paymentWebhookEvent.update({
+        where: { eventKey: id.key },
+        data: { processedAt: new Date(), result: 'ignored' },
+      });
       return { received: true, ignored: true };
     }
-    await this.enqueue({ reference: id.reference, event: id.event as PaymentEventJob['event'], refundId: id.refundId, source: 'webhook' }, id.key);
+    await this.enqueue(
+      {
+        reference: id.reference,
+        event: id.event as PaymentEventJob['event'],
+        refundId: id.refundId,
+        source: 'webhook',
+      },
+      id.key,
+    );
     return { received: true };
   }
 
@@ -170,7 +249,10 @@ export class PaymentsService {
       await this.queue.add('payment-event', job, { jobId: key.replace(/[^A-Za-z0-9_-]/g, '_') });
     } catch (err) {
       // Never lose a webhook: process it now if the queue is down. It is idempotent either way.
-      this.log.error({ err: (err as Error).message }, 'Payments queue unavailable; processing inline');
+      this.log.error(
+        { err: (err as Error).message },
+        'Payments queue unavailable; processing inline',
+      );
       await this.process(job);
     }
   }
@@ -178,9 +260,15 @@ export class PaymentsService {
   /** The queued job. Safe to run any number of times and in any order. */
   async process(job: PaymentEventJob) {
     if (job.event.startsWith('refund.')) return this.applyRefundEvent(job);
-    const intent = await this.prisma.paymentIntent.findUnique({ where: { gatewayReference: job.reference } });
+    const intent = await this.prisma.paymentIntent.findUnique({
+      where: { gatewayReference: job.reference },
+    });
     if (!intent) {
-      await this.alerts.raise({ type: 'PAYMENT_UNKNOWN_REFERENCE', message: `Paystack sent ${job.event} for ${job.reference}, which we do not know.`, data: { reference: job.reference } });
+      await this.alerts.raise({
+        type: 'PAYMENT_UNKNOWN_REFERENCE',
+        message: `Paystack sent ${job.event} for ${job.reference}, which we do not know.`,
+        data: { reference: job.reference },
+      });
       return { result: 'unknown_reference' };
     }
     // Ask Paystack what really happened: the final word, whatever order the webhooks came in.
@@ -201,17 +289,28 @@ export class PaymentsService {
           bookingId: intent.bookingId,
           data: { reference: intent.gatewayReference },
         });
-        await this.prisma.transferBooking.update({ where: { id: intent.bookingId }, data: { flaggedForOps: true, flagReason: 'PAYMENT_AMOUNT_MISMATCH' } });
+        await this.prisma.transferBooking.update({
+          where: { id: intent.bookingId },
+          data: { flaggedForOps: true, flagReason: 'PAYMENT_AMOUNT_MISMATCH' },
+        });
         return { result: 'amount_mismatch' };
       }
       const confirmed = await this.prisma.$transaction(async (t) => {
         // Compare-and-set: only one worker moves this intent to SUCCEEDED.
         const moved = await t.paymentIntent.updateMany({
           where: { id: intent.id, status: { not: 'SUCCEEDED' } },
-          data: { status: 'SUCCEEDED', paidAt: tx.paidAt ? new Date(tx.paidAt) : new Date(), gatewayFeeKobo: tx.feesKobo, failureReason: null },
+          data: {
+            status: 'SUCCEEDED',
+            paidAt: tx.paidAt ? new Date(tx.paidAt) : new Date(),
+            gatewayFeeKobo: tx.feesKobo,
+            failureReason: null,
+          },
         });
         if (moved.count !== 1) return false;
-        await this.bookings.confirmPaid(intent.bookingId, t, { reference: intent.gatewayReference, source });
+        await this.bookings.confirmPaid(intent.bookingId, t, {
+          reference: intent.gatewayReference,
+          source,
+        });
         return true;
       });
       if (confirmed) await this.steps.enqueueAfterConfirm(intent.bookingId);
@@ -224,8 +323,17 @@ export class PaymentsService {
         data: { status: tx.status === 'failed' ? 'FAILED' : 'ABANDONED', failureReason: tx.status },
       });
       if (moved.count === 1) {
-        const b = await this.prisma.transferBooking.findUniqueOrThrow({ where: { id: intent.bookingId } });
-        if (b.status === 'PENDING_PAYMENT') await this.bookings.transition(b.id, 'PAYMENT_FAILED', { role: 'SYSTEM' }, `payment ${tx.status}`, { source });
+        const b = await this.prisma.transferBooking.findUniqueOrThrow({
+          where: { id: intent.bookingId },
+        });
+        if (b.status === 'PENDING_PAYMENT')
+          await this.bookings.transition(
+            b.id,
+            'PAYMENT_FAILED',
+            { role: 'SYSTEM' },
+            `payment ${tx.status}`,
+            { source },
+          );
       }
       return { result: moved.count === 1 ? 'failed' : 'no_change' };
     }
@@ -237,9 +345,17 @@ export class PaymentsService {
   async refundable(bookingId: string) {
     const b = await this.prisma.transferBooking.findUniqueOrThrow({
       where: { id: bookingId },
-      include: { paymentIntents: { where: { status: 'SUCCEEDED' } }, refunds: { where: { status: { not: 'FAILED' } } } },
+      include: {
+        paymentIntents: { where: { status: 'SUCCEEDED' } },
+        refunds: { where: { status: { not: 'FAILED' } } },
+      },
     });
-    const paid = b.collectedBy === 'AIRWHEELS' ? b.paymentIntents.reduce((s, i) => s + i.amountKobo, 0) : ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'REFUNDING'].includes(b.status) ? b.amountKobo : 0;
+    const paid =
+      b.collectedBy === 'AIRWHEELS'
+        ? b.paymentIntents.reduce((s, i) => s + i.amountKobo, 0)
+        : ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'REFUNDING'].includes(b.status)
+          ? b.amountKobo
+          : 0;
     const refunded = b.refunds.reduce((s, r) => s + r.amountKobo, 0);
     return { booking: b, paidKobo: paid, refundedKobo: refunded, refundableKobo: paid - refunded };
   }
@@ -248,53 +364,135 @@ export class PaymentsService {
    * Refund by route: Paystack for our channel, an adjustment on the airline's statement for
    * airline-collected bookings. Ops agents are capped by config; larger refunds need a super admin.
    */
-  async refund(input: { bookingId: string; amountKobo: number; reason: string; legId?: string; actor: { userId: string; role: AdminRoleName } }) {
-    if (!Number.isSafeInteger(input.amountKobo) || input.amountKobo <= 0) throw new BadRequestException({ code: 'AMOUNT_INVALID', message: 'Enter an amount in kobo greater than zero.' });
-    if (input.actor.role === 'FINANCE') throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Finance is read-only.' });
+  async refund(input: {
+    bookingId: string;
+    amountKobo: number;
+    reason: string;
+    legId?: string;
+    /** SYSTEM: a refund decided by the change policy when the traveller cancels (TRV-07). */
+    actor: { userId?: string; role: AdminRoleName | 'SYSTEM' };
+  }) {
+    const actorRole = input.actor.role === 'SYSTEM' ? ('SYSTEM' as const) : ('OPS' as const);
+    if (!Number.isSafeInteger(input.amountKobo) || input.amountKobo <= 0)
+      throw new BadRequestException({
+        code: 'AMOUNT_INVALID',
+        message: 'Enter an amount in kobo greater than zero.',
+      });
+    if (input.actor.role === 'FINANCE')
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Finance is read-only.' });
     if (input.actor.role === 'OPS_AGENT') {
       const limit = await this.config.get<number>(CONFIG.refundOpsAgentLimitKobo);
       if (input.amountKobo > limit) {
-        throw new ForbiddenException({ code: 'REFUND_OVER_LIMIT', message: `Ops agents can refund up to ${limit / 100} naira at a time. Ask a super admin for larger refunds.`, limitKobo: limit });
+        throw new ForbiddenException({
+          code: 'REFUND_OVER_LIMIT',
+          message: `Ops agents can refund up to ${limit / 100} naira at a time. Ask a super admin for larger refunds.`,
+          limitKobo: limit,
+        });
       }
     }
     const { booking: b, paidKobo, refundableKobo } = await this.refundable(input.bookingId);
-    if (paidKobo === 0) throw new BadRequestException({ code: 'NOTHING_PAID', message: 'Nothing has been paid on this booking.' });
+    if (paidKobo === 0)
+      throw new BadRequestException({
+        code: 'NOTHING_PAID',
+        message: 'Nothing has been paid on this booking.',
+      });
     if (input.amountKobo > refundableKobo) {
-      throw new BadRequestException({ code: 'REFUND_TOO_LARGE', message: `At most ${refundableKobo / 100} naira can still be refunded.`, refundableKobo });
+      throw new BadRequestException({
+        code: 'REFUND_TOO_LARGE',
+        message: `At most ${refundableKobo / 100} naira can still be refunded.`,
+        refundableKobo,
+      });
     }
     if (input.legId) {
-      const leg = await this.prisma.rideLeg.findFirst({ where: { id: input.legId, bookingId: b.id } });
-      if (!leg) throw new BadRequestException({ code: 'LEG_INVALID', message: 'That leg is not on this booking.' });
+      const leg = await this.prisma.rideLeg.findFirst({
+        where: { id: input.legId, bookingId: b.id },
+      });
+      if (!leg)
+        throw new BadRequestException({
+          code: 'LEG_INVALID',
+          message: 'That leg is not on this booking.',
+        });
     }
     const route = b.collectedBy === 'AIRWHEELS' ? ('PAYSTACK' as const) : ('AIRLINE' as const);
-    const airline = b.airlineId ? await this.prisma.airline.findUnique({ where: { id: b.airlineId } }) : null;
+    const airline = b.airlineId
+      ? await this.prisma.airline.findUnique({ where: { id: b.airlineId } })
+      : null;
     const full = input.amountKobo === refundableKobo;
 
     const refund = await this.prisma.$transaction(async (t) => {
       const r = await t.refund.create({
-        data: { bookingId: b.id, legId: input.legId, amountKobo: input.amountKobo, route, status: 'REQUESTED', reason: input.reason, issuedById: input.actor.userId, issuedByRole: input.actor.role },
+        data: {
+          bookingId: b.id,
+          legId: input.legId,
+          amountKobo: input.amountKobo,
+          route,
+          status: 'REQUESTED',
+          reason: input.reason,
+          issuedById: input.actor.userId ?? null,
+          issuedByRole: input.actor.role,
+        },
       });
       // The refund is committed money: post it now, once (reference refund:<id>).
       await this.ledger.post(
-        refundPosting({ reference: `refund:${r.id}`, bookingId: b.id, amountKobo: r.amountKobo, route, airline: airline ? { id: airline.id, code: airline.code } : null }),
+        refundPosting({
+          reference: `refund:${r.id}`,
+          bookingId: b.id,
+          amountKobo: r.amountKobo,
+          route,
+          airline: airline ? { id: airline.id, code: airline.code } : null,
+        }),
         t,
       );
-      if (full) await this.bookings.transition(b.id, 'REFUNDING', { role: 'OPS', id: input.actor.userId }, input.reason, { refundId: r.id, amountKobo: r.amountKobo }, t);
-      else await t.bookingEvent.create({ data: { bookingId: b.id, type: 'refund.partial', actorRole: 'OPS', actorId: input.actor.userId, reason: input.reason, data: { refundId: r.id, amountKobo: r.amountKobo } } });
+      if (full)
+        await this.bookings.transition(
+          b.id,
+          'REFUNDING',
+          { role: actorRole, id: input.actor.userId },
+          input.reason,
+          { refundId: r.id, amountKobo: r.amountKobo },
+          t,
+        );
+      else
+        await t.bookingEvent.create({
+          data: {
+            bookingId: b.id,
+            type: 'refund.partial',
+            actorRole,
+            actorId: input.actor.userId ?? null,
+            reason: input.reason,
+            data: { refundId: r.id, amountKobo: r.amountKobo },
+          },
+        });
       return r;
     });
 
     let status = refund.status;
     if (route === 'PAYSTACK') {
-      const intent = await this.prisma.paymentIntent.findFirstOrThrow({ where: { bookingId: b.id, status: 'SUCCEEDED' } });
+      const intent = await this.prisma.paymentIntent.findFirstOrThrow({
+        where: { bookingId: b.id, status: 'SUCCEEDED' },
+      });
       try {
         const res = await this.gateway.refund(intent.gatewayReference, refund.amountKobo);
         status = res.status === 'processed' ? 'COMPLETED' : 'PROCESSING';
-        await this.prisma.refund.update({ where: { id: refund.id }, data: { gatewayRefundId: res.refundId, status, completedAt: status === 'COMPLETED' ? new Date() : null } });
+        await this.prisma.refund.update({
+          where: { id: refund.id },
+          data: {
+            gatewayRefundId: res.refundId,
+            status,
+            completedAt: status === 'COMPLETED' ? new Date() : null,
+          },
+        });
       } catch (e) {
         // The ledger line stands as a liability until ops retries or Paystack confirms; ops is told.
-        await this.prisma.refund.update({ where: { id: refund.id }, data: { status: 'PROCESSING' } });
-        await this.alerts.raise({ type: 'REFUND_GATEWAY_ERROR', message: `Paystack did not accept refund ${refund.id}: ${(e as Error).message}`, bookingId: b.id });
+        await this.prisma.refund.update({
+          where: { id: refund.id },
+          data: { status: 'PROCESSING' },
+        });
+        await this.alerts.raise({
+          type: 'REFUND_GATEWAY_ERROR',
+          message: `Paystack did not accept refund ${refund.id}: ${(e as Error).message}`,
+          bookingId: b.id,
+        });
         status = 'PROCESSING';
       }
     } else {
@@ -302,29 +500,63 @@ export class PaymentsService {
       status = 'PROCESSING';
       await this.prisma.refund.update({ where: { id: refund.id }, data: { status } });
     }
-    if (full && status === 'COMPLETED') await this.bookings.transition(b.id, 'REFUNDED', { role: 'SYSTEM' }, 'refund completed', { refundId: refund.id });
+    if (full && status === 'COMPLETED')
+      await this.bookings.transition(b.id, 'REFUNDED', { role: 'SYSTEM' }, 'refund completed', {
+        refundId: refund.id,
+      });
 
+    // The traveller's own cancellation message already states the refund.
+    if (input.actor.role !== 'SYSTEM')
+      await this.messaging.notify('refund.issued', {
+        bookingId: b.id,
+        extra: { cost: `₦${(refund.amountKobo / 100).toLocaleString('en-NG')}` },
+        instance: refund.id,
+      });
     await this.audit.record({
       action: 'booking.refund',
       entity: 'Refund',
       entityId: refund.id,
-      after: { bookingId: b.id, amountKobo: refund.amountKobo, route, status, reason: input.reason, full },
+      after: {
+        bookingId: b.id,
+        amountKobo: refund.amountKobo,
+        route,
+        status,
+        reason: input.reason,
+        full,
+      },
     });
-    return { id: refund.id, amountKobo: refund.amountKobo, route, status, bookingStatus: (await this.prisma.transferBooking.findUniqueOrThrow({ where: { id: b.id } })).status };
+    return {
+      id: refund.id,
+      amountKobo: refund.amountKobo,
+      route,
+      status,
+      bookingStatus: (await this.prisma.transferBooking.findUniqueOrThrow({ where: { id: b.id } }))
+        .status,
+    };
   }
 
   private async applyRefundEvent(job: PaymentEventJob) {
-    const r = job.refundId ? await this.prisma.refund.findUnique({ where: { gatewayRefundId: job.refundId } }) : null;
+    const r = job.refundId
+      ? await this.prisma.refund.findUnique({ where: { gatewayRefundId: job.refundId } })
+      : null;
     if (!r) return { result: 'unknown_refund' };
     if (job.event === 'refund.processed' && r.status !== 'COMPLETED') {
-      await this.prisma.refund.update({ where: { id: r.id }, data: { status: 'COMPLETED', completedAt: new Date() } });
+      await this.prisma.refund.update({
+        where: { id: r.id },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
       const { refundableKobo } = await this.refundable(r.bookingId);
       const b = await this.prisma.transferBooking.findUniqueOrThrow({ where: { id: r.bookingId } });
-      if (refundableKobo === 0 && b.status === 'REFUNDING') await this.bookings.transition(b.id, 'REFUNDED', { role: 'SYSTEM' }, 'refund completed');
+      if (refundableKobo === 0 && b.status === 'REFUNDING')
+        await this.bookings.transition(b.id, 'REFUNDED', { role: 'SYSTEM' }, 'refund completed');
       return { result: 'refund_completed' };
     }
     if (job.event === 'refund.failed') {
-      await this.alerts.raise({ type: 'REFUND_FAILED', message: `Paystack could not complete refund ${r.id}.`, bookingId: r.bookingId });
+      await this.alerts.raise({
+        type: 'REFUND_FAILED',
+        message: `Paystack could not complete refund ${r.id}.`,
+        bookingId: r.bookingId,
+      });
       return { result: 'refund_failed' };
     }
     return { result: 'no_change' };
@@ -337,8 +569,13 @@ export class PaymentsService {
    * 2. The day's Paystack transactions against our records: anything missing or different is
    *    flagged to ops. 3. The ledger must balance.
    */
-  async reconcile(trigger: 'schedule' | 'ops' | 'system', day = lagosParts(new Date(Date.now() - 86_400_000)).date) {
-    const run = await this.prisma.reconciliationRun.create({ data: { day, trigger, mismatches: [] } });
+  async reconcile(
+    trigger: 'schedule' | 'ops' | 'system',
+    day = lagosParts(new Date(Date.now() - 86_400_000)).date,
+  ) {
+    const run = await this.prisma.reconciliationRun.create({
+      data: { day, trigger, mismatches: [] },
+    });
     const mismatches: { kind: string; reference: string; detail: string }[] = [];
     let settled = 0;
     let failed = 0;
@@ -354,33 +591,80 @@ export class PaymentsService {
     for (const p of pending) {
       const tx = await this.gateway.verify(p.gatewayReference).catch(() => null);
       const old = p.createdAt < new Date(Date.now() - abandonAfter * 3_600_000);
-      const r = await this.applyGatewayState(p.id, tx ?? (old ? { reference: p.gatewayReference, status: 'abandoned', amountKobo: p.amountKobo, currency: 'NGN', feesKobo: 0 } : null), 'reconciliation');
+      const r = await this.applyGatewayState(
+        p.id,
+        tx ??
+          (old
+            ? {
+                reference: p.gatewayReference,
+                status: 'abandoned',
+                amountKobo: p.amountKobo,
+                currency: 'NGN',
+                feesKobo: 0,
+              }
+            : null),
+        'reconciliation',
+      );
       if (r.result === 'confirmed') settled++;
       if (r.result === 'failed') failed++;
-      if (r.result === 'amount_mismatch') mismatches.push({ kind: 'AMOUNT_MISMATCH', reference: p.gatewayReference, detail: 'Paystack amount differs from ours' });
+      if (r.result === 'amount_mismatch')
+        mismatches.push({
+          kind: 'AMOUNT_MISMATCH',
+          reference: p.gatewayReference,
+          detail: 'Paystack amount differs from ours',
+        });
     }
 
     // Lagos day window [00:00, 24:00) in UTC.
     const from = new Date(`${day}T00:00:00+01:00`);
     const to = new Date(from.getTime() + 86_400_000);
     const gatewayTxns = await this.gateway.listTransactions(from, to);
-    const ours = await this.prisma.paymentIntent.findMany({ where: { createdAt: { gte: from, lt: to } } });
+    const ours = await this.prisma.paymentIntent.findMany({
+      where: { createdAt: { gte: from, lt: to } },
+    });
     const byRef = new Map(ours.map((o) => [o.gatewayReference, o]));
     for (const g of gatewayTxns) {
       const o = byRef.get(g.reference);
       if (!o) {
-        if (g.status === 'success') mismatches.push({ kind: 'MISSING_AT_AIRWHEELS', reference: g.reference, detail: `Paystack has a successful ${g.amountKobo} kobo payment we have no record of` });
+        if (g.status === 'success')
+          mismatches.push({
+            kind: 'MISSING_AT_AIRWHEELS',
+            reference: g.reference,
+            detail: `Paystack has a successful ${g.amountKobo} kobo payment we have no record of`,
+          });
         continue;
       }
-      if (g.status === 'success' && o.status !== 'SUCCEEDED') mismatches.push({ kind: 'STATUS_MISMATCH', reference: g.reference, detail: `Paystack: success, us: ${o.status}` });
-      if (g.status === 'success' && g.amountKobo !== o.amountKobo) mismatches.push({ kind: 'AMOUNT_MISMATCH', reference: g.reference, detail: `Paystack ${g.amountKobo}, us ${o.amountKobo}` });
+      if (g.status === 'success' && o.status !== 'SUCCEEDED')
+        mismatches.push({
+          kind: 'STATUS_MISMATCH',
+          reference: g.reference,
+          detail: `Paystack: success, us: ${o.status}`,
+        });
+      if (g.status === 'success' && g.amountKobo !== o.amountKobo)
+        mismatches.push({
+          kind: 'AMOUNT_MISMATCH',
+          reference: g.reference,
+          detail: `Paystack ${g.amountKobo}, us ${o.amountKobo}`,
+        });
     }
-    const gatewayRefs = new Set(gatewayTxns.filter((g) => g.status === 'success').map((g) => g.reference));
+    const gatewayRefs = new Set(
+      gatewayTxns.filter((g) => g.status === 'success').map((g) => g.reference),
+    );
     for (const o of ours) {
-      if (o.status === 'SUCCEEDED' && !gatewayRefs.has(o.gatewayReference)) mismatches.push({ kind: 'MISSING_AT_PAYSTACK', reference: o.gatewayReference, detail: 'We show it paid; Paystack does not list it as successful' });
+      if (o.status === 'SUCCEEDED' && !gatewayRefs.has(o.gatewayReference))
+        mismatches.push({
+          kind: 'MISSING_AT_PAYSTACK',
+          reference: o.gatewayReference,
+          detail: 'We show it paid; Paystack does not list it as successful',
+        });
     }
     const trial = await this.ledger.trialBalance();
-    if (!trial.balanced) mismatches.push({ kind: 'LEDGER_UNBALANCED', reference: '-', detail: `Debits ${trial.debitsKobo}, credits ${trial.creditsKobo}` });
+    if (!trial.balanced)
+      mismatches.push({
+        kind: 'LEDGER_UNBALANCED',
+        reference: '-',
+        detail: `Debits ${trial.debitsKobo}, credits ${trial.creditsKobo}`,
+      });
 
     if (mismatches.length) {
       await this.alerts.raise({
@@ -391,7 +675,13 @@ export class PaymentsService {
     }
     return this.prisma.reconciliationRun.update({
       where: { id: run.id },
-      data: { checked: pending.length + gatewayTxns.length, settled, failed, mismatches, finishedAt: new Date() },
+      data: {
+        checked: pending.length + gatewayTxns.length,
+        settled,
+        failed,
+        mismatches,
+        finishedAt: new Date(),
+      },
     });
   }
 }

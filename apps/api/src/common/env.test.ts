@@ -9,7 +9,16 @@ import { fakeProvidersAllowedEnv, isDevelopment, isDevelopmentEnv } from './env'
  * ACC-12: development shortcuts work only when the environment is explicitly development, and
  * are blocked everywhere else: staging, production, an unset NODE_ENV, or any spelling mistake.
  */
-const BLOCKED = ['staging', 'production', undefined, '', 'Development', 'dev', 'prod', 'DEVELOPMENT '];
+const BLOCKED = [
+  'staging',
+  'production',
+  undefined,
+  '',
+  'Development',
+  'dev',
+  'prod',
+  'DEVELOPMENT ',
+];
 
 const original = process.env.NODE_ENV;
 afterEach(() => {
@@ -52,21 +61,38 @@ describe('ACC-12: development shortcuts', { timeout: 120_000 }, () => {
     const payments = bindings.find((b) => b.token === PAYMENTS)!;
     class Live {}
     const live = new Map([[PAYMENTS, Live as new () => object]]);
-    expect(chooseAdapter(payments, { NODE_ENV: 'production', ADAPTERS_MODE: 'live', PAYSTACK_SECRET_KEY: 'sk_test_x' }, live).kind).toBe('live');
-    expect(() => chooseAdapter(payments, { NODE_ENV: 'production', ADAPTERS_MODE: 'live' }, live)).toThrow();
+    expect(
+      chooseAdapter(
+        payments,
+        { NODE_ENV: 'production', ADAPTERS_MODE: 'live', PAYSTACK_SECRET_KEY: 'sk_test_x' },
+        live,
+      ).kind,
+    ).toBe('live');
+    expect(() =>
+      chooseAdapter(payments, { NODE_ENV: 'production', ADAPTERS_MODE: 'live' }, live),
+    ).toThrow();
     // A provider with no live adapter built yet cannot run outside development.
     const sms = bindings.find((b) => b.token === SMS)!;
-    expect(() => chooseAdapter(sms, { NODE_ENV: 'staging', ADAPTERS_MODE: 'live', TERMII_API_KEY: 'x' }, live)).toThrow();
+    expect(() =>
+      chooseAdapter(sms, { NODE_ENV: 'staging', ADAPTERS_MODE: 'live', TERMII_API_KEY: 'x' }, live),
+    ).toThrow();
     expect(chooseAdapter(sms, { NODE_ENV: 'development' }, live).kind).toBe('fake');
   });
 
-  it.each(BLOCKED)('local file storage and the fake checkout are switched off when NODE_ENV=%j', async (env) => {
-    setEnv(env);
-    const storage = new FakeStorageController();
-    expect(() => storage.get({ op: 'get', key: 'x', exp: '0', sig: 'x' })).toThrow(NotFoundException);
-    const { FakePaystackController } = await import('../modules/payments/payments.module');
-    const { FakePayments } = await import('../adapters/fakes');
-    const ctrl = new FakePaystackController({} as never, new FakePayments());
-    await expect(ctrl.complete('AW-X', { outcome: 'success' })).rejects.toBeInstanceOf(NotFoundException);
-  });
+  it.each(BLOCKED)(
+    'local file storage and the fake checkout are switched off when NODE_ENV=%j',
+    async (env) => {
+      setEnv(env);
+      const storage = new FakeStorageController();
+      expect(() => storage.get({ op: 'get', key: 'x', exp: '0', sig: 'x' })).toThrow(
+        NotFoundException,
+      );
+      const { FakePaystackController } = await import('../modules/payments/payments.module');
+      const { FakePayments } = await import('../adapters/fakes');
+      const ctrl = new FakePaystackController({} as never, new FakePayments());
+      await expect(ctrl.complete('AW-X', { outcome: 'success' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    },
+  );
 });

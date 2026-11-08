@@ -9,7 +9,9 @@ export default defineConfig({
   envDir: '../..',
   resolve: {
     // Bundle the brand tokens from source so the widget stays one small self-contained file.
-    alias: { '@airwheels/ui': fileURLToPath(new URL('../../packages/ui/src/index.ts', import.meta.url)) },
+    alias: {
+      '@airwheels/ui': fileURLToPath(new URL('../../packages/ui/src/index.ts', import.meta.url)),
+    },
   },
   build: {
     lib: {

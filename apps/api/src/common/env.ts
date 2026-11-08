@@ -10,7 +10,8 @@
  * The `...Env` functions are pure (pass the value to check); the others read process.env.
  */
 export const isDevelopmentEnv = (env: string | undefined): boolean => env === 'development';
-export const fakeProvidersAllowedEnv = (env: string | undefined): boolean => env === 'development' || env === 'test';
+export const fakeProvidersAllowedEnv = (env: string | undefined): boolean =>
+  env === 'development' || env === 'test';
 
 export const isDevelopment = (): boolean => isDevelopmentEnv(process.env.NODE_ENV);
 export const fakeProvidersAllowed = (): boolean => fakeProvidersAllowedEnv(process.env.NODE_ENV);

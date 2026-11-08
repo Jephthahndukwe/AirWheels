@@ -575,16 +575,19 @@ model TrackingToken {
 
 /// One-time code for traveller change and cancel (ACC-02).
 model ChangeCode {
-  id        String    @id @default(uuid()) @db.Uuid
-  bookingId String    @db.Uuid
-  codeHash  String
-  attempts  Int       @default(0)
-  expiresAt DateTime  @db.Timestamptz(3)
-  usedAt    DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  id             String    @id @default(uuid()) @db.Uuid
+  bookingId      String    @db.Uuid
+  codeHash       String
+  attempts       Int       @default(0)
+  expiresAt      DateTime  @db.Timestamptz(3)
+  usedAt         DateTime? @db.Timestamptz(3)
+  /// After the right code, a short-lived grant lets the page preview and apply changes.
+  grantHash      String?   @unique
+  grantExpiresAt DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@index([bookingId])
+  @@index([bookingId, createdAt])
 }
 
 model RideLeg {
@@ -993,16 +996,40 @@ model Notification {
   recipient         String // phone, email, push token or chat channel
   recipientRole     ActorRole
   bookingId         String?             @db.Uuid
-  template          String
+  legId             String?             @db.Uuid
+  template          String // event name from PRD 7.1, e.g. booking.confirmed
+  templateVersion   Int?
   channel           NotificationChannel
+  /// WhatsApp only: TEMPLATE (approved, any time) or SESSION (free-form, inside the 24-hour window).
+  kind              String?
   status            NotificationStatus  @default(QUEUED)
-  providerMessageId String?
+  providerMessageId String?             @unique
+  /// Rendered text with any pickup code masked, so ops can read it without seeing secrets.
+  preview           String?
+  buttons           Json?
+  /// One logical message per booking event; retries and duplicates collapse onto it.
+  dedupeKey         String?             @unique
+  /// The WhatsApp message this SMS replaced (NTF-01 fallback).
+  fallbackForId     String?             @db.Uuid
+  sentAt            DateTime?           @db.Timestamptz(3)
+  deliveredAt       DateTime?           @db.Timestamptz(3)
+  readAt            DateTime?           @db.Timestamptz(3)
   error             String?
   time              DateTime            @default(now()) @db.Timestamptz(3)
   createdAt         DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
 
   @@index([bookingId])
+  @@index([recipient, time])
+  @@index([channel, status, sentAt])
+}
+
+/// WhatsApp customer-service window per phone (PRD 7.3): free-form messages only within 24 hours of the last inbound message.
+model ConversationWindow {
+  phone         String   @id
+  lastInboundAt DateTime @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 }
 
 model TravellerReply {
@@ -1040,6 +1067,8 @@ model Rating {
   comment   String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([legId])
 }
 
 /// Append-only. Every admin write (PRD 2.2).

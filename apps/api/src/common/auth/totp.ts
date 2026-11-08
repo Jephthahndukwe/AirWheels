@@ -40,7 +40,8 @@ export function base32Decode(text: string): Buffer {
 
 export const generateTotpSecret = (): string => base32Encode(randomBytes(20));
 
-export const totpStep = (atMs: number = Date.now()): number => Math.floor(atMs / 1000 / TOTP_STEP_SECONDS);
+export const totpStep = (atMs: number = Date.now()): number =>
+  Math.floor(atMs / 1000 / TOTP_STEP_SECONDS);
 
 export function hotp(secret: Buffer, counter: number, digits = 6): string {
   const msg = Buffer.alloc(8);
@@ -58,7 +59,12 @@ export const totpCode = (base32Secret: string, atMs: number = Date.now()): strin
  * Checks a code against the current step and one step either side (clock drift).
  * Returns the matched step so the caller can refuse a replay of the same or an older step.
  */
-export function verifyTotp(base32Secret: string, code: string, atMs: number = Date.now(), window = 1): number | null {
+export function verifyTotp(
+  base32Secret: string,
+  code: string,
+  atMs: number = Date.now(),
+  window = 1,
+): number | null {
   if (!/^\d{6}$/.test(code)) return null;
   const key = base32Decode(base32Secret);
   const now = totpStep(atMs);

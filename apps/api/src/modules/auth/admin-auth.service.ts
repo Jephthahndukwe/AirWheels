@@ -44,20 +44,36 @@ export class AdminAuthService {
 
   async login(input: { email: string; password: string; totp: string }, meta: RequestMeta) {
     const email = normaliseEmail(input.email);
-    const user = await this.prisma.user.findUnique({ where: { email }, include: { adminProfile: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { adminProfile: true },
+    });
     const admin = user?.adminProfile;
     const fail = async (reason: string, countFailure: boolean) => {
       await this.prisma.loginEvent.create({
-        data: { userId: user?.id, kind: 'ADMIN', identifier: email, success: false, reason, ip: meta.ip, userAgent: meta.userAgent },
+        data: {
+          userId: user?.id,
+          kind: 'ADMIN',
+          identifier: email,
+          success: false,
+          reason,
+          ip: meta.ip,
+          userAgent: meta.userAgent,
+        },
       });
       if (countFailure && admin) {
-        const lock = await this.config.get<{ maxFailures: number; lockMinutes: number }>(CONFIG.adminLockout);
+        const lock = await this.config.get<{ maxFailures: number; lockMinutes: number }>(
+          CONFIG.adminLockout,
+        );
         const failures = admin.failedLoginCount + 1;
         await this.prisma.adminProfile.update({
           where: { id: admin.id },
           data:
             failures >= lock.maxFailures
-              ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + lock.lockMinutes * 60_000) }
+              ? {
+                  failedLoginCount: 0,
+                  lockedUntil: new Date(Date.now() + lock.lockMinutes * 60_000),
+                }
               : { failedLoginCount: failures },
         });
       }
@@ -66,7 +82,10 @@ export class AdminAuthService {
     if (admin?.lockedUntil && admin.lockedUntil > new Date()) {
       await fail('locked', false);
       throw new HttpException(
-        { code: 'ACCOUNT_LOCKED', message: 'Too many failed sign-ins. This account is locked for a few minutes.' },
+        {
+          code: 'ACCOUNT_LOCKED',
+          message: 'Too many failed sign-ins. This account is locked for a few minutes.',
+        },
         HttpStatus.LOCKED,
       );
     }
@@ -87,12 +106,30 @@ export class AdminAuthService {
 
     await this.prisma.adminProfile.update({
       where: { id: admin.id },
-      data: { failedLoginCount: 0, lockedUntil: null, lastTotpStep: step, lastLoginAt: new Date(), lastLoginIp: meta.ip },
+      data: {
+        failedLoginCount: 0,
+        lockedUntil: null,
+        lastTotpStep: step,
+        lastLoginAt: new Date(),
+        lastLoginIp: meta.ip,
+      },
     });
     await this.prisma.loginEvent.create({
-      data: { userId: user.id, kind: 'ADMIN', identifier: email, success: true, ip: meta.ip, userAgent: meta.userAgent },
+      data: {
+        userId: user.id,
+        kind: 'ADMIN',
+        identifier: email,
+        success: true,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      },
     });
-    const session = await this.sessions.create({ userId: user.id, kind: 'ADMIN', ip: meta.ip, userAgent: meta.userAgent });
+    const session = await this.sessions.create({
+      userId: user.id,
+      kind: 'ADMIN',
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
     await this.audit.record({
       action: 'auth.admin_sign_in',
       entity: 'Session',
@@ -102,12 +139,20 @@ export class AdminAuthService {
       actorLabel: `${email} (${admin.role})`,
       ip: meta.ip,
     });
-    return { token: session.token, expiresAt: session.expiresAt, admin: { name: admin.name, email, role: admin.role } };
+    return {
+      token: session.token,
+      expiresAt: session.expiresAt,
+      admin: { name: admin.name, email, role: admin.role },
+    };
   }
 
   async logout(sessionId: string) {
     await this.sessions.revokeOne(sessionId, 'sign_out');
-    await this.audit.record({ action: 'auth.admin_sign_out', entity: 'Session', entityId: sessionId });
+    await this.audit.record({
+      action: 'auth.admin_sign_out',
+      entity: 'Session',
+      entityId: sessionId,
+    });
     return { ok: true };
   }
 
@@ -122,11 +167,21 @@ export class AdminAuthService {
   // ---------- invites ----------
 
   /** Creates an invite and emails the link. Used by super admins and by the one-time CLI. */
-  async createInvite(input: { email: string; name: string; role: AdminRole; invitedById?: string }) {
+  async createInvite(input: {
+    email: string;
+    name: string;
+    role: AdminRole;
+    invitedById?: string;
+  }) {
     const email = normaliseEmail(input.email);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException({ code: 'EMAIL_INVALID', message: 'Enter a valid email.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new BadRequestException({ code: 'EMAIL_INVALID', message: 'Enter a valid email.' });
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException({ code: 'STAFF_EXISTS', message: 'Someone with this email is already staff.' });
+    if (existing)
+      throw new ConflictException({
+        code: 'STAFF_EXISTS',
+        message: 'Someone with this email is already staff.',
+      });
     await this.prisma.adminInvite.updateMany({
       where: { email, acceptedAt: null, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -167,9 +222,14 @@ export class AdminAuthService {
   }
 
   private async openInvite(token: string) {
-    const invite = await this.prisma.adminInvite.findUnique({ where: { tokenHash: sha256(token) } });
+    const invite = await this.prisma.adminInvite.findUnique({
+      where: { tokenHash: sha256(token) },
+    });
     if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt <= new Date()) {
-      throw new NotFoundException({ code: 'INVITE_INVALID', message: 'This invite link is not valid any more. Ask for a new one.' });
+      throw new NotFoundException({
+        code: 'INVITE_INVALID',
+        message: 'This invite link is not valid any more. Ask for a new one.',
+      });
     }
     return invite;
   }
@@ -180,7 +240,10 @@ export class AdminAuthService {
     let secret = invite.pendingTotpSecret ? decrypt(invite.pendingTotpSecret) : null;
     if (!secret) {
       secret = generateTotpSecret();
-      await this.prisma.adminInvite.update({ where: { id: invite.id }, data: { pendingTotpSecret: encrypt(secret) } });
+      await this.prisma.adminInvite.update({
+        where: { id: invite.id },
+        data: { pendingTotpSecret: encrypt(secret) },
+      });
     }
     return {
       email: invite.email,
@@ -194,12 +257,20 @@ export class AdminAuthService {
   /** Sets the password, proves the authenticator works, creates the account and signs in. */
   async acceptInvite(input: { token: string; password: string; totp: string }, meta: RequestMeta) {
     const invite = await this.openInvite(input.token);
-    if (!invite.pendingTotpSecret) throw new BadRequestException({ code: 'INVITE_NOT_OPENED', message: 'Open the invite link first.' });
+    if (!invite.pendingTotpSecret)
+      throw new BadRequestException({
+        code: 'INVITE_NOT_OPENED',
+        message: 'Open the invite link first.',
+      });
     const problem = passwordProblem(input.password);
     if (problem) throw new BadRequestException({ code: 'PASSWORD_WEAK', message: problem });
     const secret = decrypt(invite.pendingTotpSecret);
     const step = verifyTotp(secret, input.totp);
-    if (step === null) throw new BadRequestException({ code: 'TOTP_INVALID', message: 'That code is wrong. Check the time on your phone and try the newest code.' });
+    if (step === null)
+      throw new BadRequestException({
+        code: 'TOTP_INVALID',
+        message: 'That code is wrong. Check the time on your phone and try the newest code.',
+      });
 
     const passwordHash = await hashSecret(input.password);
     const user = await this.prisma.$transaction(async (tx) => {
@@ -207,9 +278,16 @@ export class AdminAuthService {
         where: { id: invite.id, acceptedAt: null, revokedAt: null },
         data: { acceptedAt: new Date(), pendingTotpSecret: null },
       });
-      if (claimed.count !== 1) throw new ConflictException({ code: 'INVITE_USED', message: 'This invite was already used.' });
+      if (claimed.count !== 1)
+        throw new ConflictException({
+          code: 'INVITE_USED',
+          message: 'This invite was already used.',
+        });
       if (await tx.user.findUnique({ where: { email: invite.email } })) {
-        throw new ConflictException({ code: 'STAFF_EXISTS', message: 'Someone with this email is already staff.' });
+        throw new ConflictException({
+          code: 'STAFF_EXISTS',
+          message: 'Someone with this email is already staff.',
+        });
       }
       return tx.user.create({
         data: {
@@ -231,9 +309,22 @@ export class AdminAuthService {
       });
     });
     await this.prisma.loginEvent.create({
-      data: { userId: user.id, kind: 'ADMIN', identifier: invite.email, success: true, reason: 'invite_accepted', ip: meta.ip, userAgent: meta.userAgent },
+      data: {
+        userId: user.id,
+        kind: 'ADMIN',
+        identifier: invite.email,
+        success: true,
+        reason: 'invite_accepted',
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      },
     });
-    const session = await this.sessions.create({ userId: user.id, kind: 'ADMIN', ip: meta.ip, userAgent: meta.userAgent });
+    const session = await this.sessions.create({
+      userId: user.id,
+      kind: 'ADMIN',
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
     await this.audit.record({
       action: 'staff.invite_accepted',
       entity: 'AdminProfile',
@@ -284,33 +375,66 @@ export class AdminAuthService {
 
   async revokeInvite(id: string) {
     const before = await this.prisma.adminInvite.findUnique({ where: { id } });
-    if (!before) throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'No such invite.' });
+    if (!before)
+      throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'No such invite.' });
     await this.prisma.adminInvite.update({ where: { id }, data: { revokedAt: new Date() } });
-    await this.audit.record({ action: 'staff.invite_revoke', entity: 'AdminInvite', entityId: id, before: { email: before.email, role: before.role } });
+    await this.audit.record({
+      action: 'staff.invite_revoke',
+      entity: 'AdminInvite',
+      entityId: id,
+      before: { email: before.email, role: before.role },
+    });
     return { ok: true };
   }
 
-  async updateStaff(actorUserId: string, adminId: string, input: { role?: AdminRole; disabled?: boolean; unlock?: boolean }) {
-    const before = await this.prisma.adminProfile.findUnique({ where: { id: adminId }, include: { user: true } });
-    if (!before) throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'No such staff member.' });
-    if (before.userId === actorUserId && (input.disabled || (input.role && input.role !== 'SUPER_ADMIN'))) {
-      throw new BadRequestException({ code: 'SELF_CHANGE', message: 'You cannot disable yourself or remove your own super admin role.' });
+  async updateStaff(
+    actorUserId: string,
+    adminId: string,
+    input: { role?: AdminRole; disabled?: boolean; unlock?: boolean },
+  ) {
+    const before = await this.prisma.adminProfile.findUnique({
+      where: { id: adminId },
+      include: { user: true },
+    });
+    if (!before)
+      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'No such staff member.' });
+    if (
+      before.userId === actorUserId &&
+      (input.disabled || (input.role && input.role !== 'SUPER_ADMIN'))
+    ) {
+      throw new BadRequestException({
+        code: 'SELF_CHANGE',
+        message: 'You cannot disable yourself or remove your own super admin role.',
+      });
     }
-    if (input.role && input.role !== 'SUPER_ADMIN' && before.role === 'SUPER_ADMIN') await this.assertAnotherSuperAdmin(adminId);
-    if (input.disabled && before.role === 'SUPER_ADMIN') await this.assertAnotherSuperAdmin(adminId);
+    if (input.role && input.role !== 'SUPER_ADMIN' && before.role === 'SUPER_ADMIN')
+      await this.assertAnotherSuperAdmin(adminId);
+    if (input.disabled && before.role === 'SUPER_ADMIN')
+      await this.assertAnotherSuperAdmin(adminId);
 
     await this.prisma.$transaction([
       this.prisma.adminProfile.update({
         where: { id: adminId },
-        data: { ...(input.role ? { role: input.role } : {}), ...(input.unlock ? { lockedUntil: null, failedLoginCount: 0 } : {}) },
+        data: {
+          ...(input.role ? { role: input.role } : {}),
+          ...(input.unlock ? { lockedUntil: null, failedLoginCount: 0 } : {}),
+        },
       }),
       ...(input.disabled !== undefined
-        ? [this.prisma.user.update({ where: { id: before.userId }, data: { status: input.disabled ? 'DISABLED' : 'ACTIVE' } })]
+        ? [
+            this.prisma.user.update({
+              where: { id: before.userId },
+              data: { status: input.disabled ? 'DISABLED' : 'ACTIVE' },
+            }),
+          ]
         : []),
     ]);
     // A role change or disable takes effect at once: end their sessions.
     if (input.disabled || (input.role && input.role !== before.role)) {
-      await this.sessions.revokeAllForUser(before.userId, input.disabled ? 'disabled' : 'role_changed');
+      await this.sessions.revokeAllForUser(
+        before.userId,
+        input.disabled ? 'disabled' : 'role_changed',
+      );
     }
     await this.audit.record({
       action: 'staff.update',
@@ -319,7 +443,12 @@ export class AdminAuthService {
       before: { role: before.role, status: before.user.status, lockedUntil: before.lockedUntil },
       after: {
         role: input.role ?? before.role,
-        status: input.disabled === undefined ? before.user.status : input.disabled ? 'DISABLED' : 'ACTIVE',
+        status:
+          input.disabled === undefined
+            ? before.user.status
+            : input.disabled
+              ? 'DISABLED'
+              : 'ACTIVE',
         lockedUntil: input.unlock ? null : before.lockedUntil,
       },
     });
@@ -330,6 +459,10 @@ export class AdminAuthService {
     const others = await this.prisma.adminProfile.count({
       where: { role: 'SUPER_ADMIN', id: { not: exceptAdminId }, user: { status: 'ACTIVE' } },
     });
-    if (others === 0) throw new BadRequestException({ code: 'LAST_SUPER_ADMIN', message: 'Keep at least one active super admin.' });
+    if (others === 0)
+      throw new BadRequestException({
+        code: 'LAST_SUPER_ADMIN',
+        message: 'Keep at least one active super admin.',
+      });
   }
 }

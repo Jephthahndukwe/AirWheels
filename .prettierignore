@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.expo/
+coverage/
+playwright-report/
+test-results/
+.storage/
+pnpm-lock.yaml
+# generated
+packages/api-client/openapi.json
+packages/api-client/src/generated/
+apps/api/prisma/migrations/
+next-env.d.ts

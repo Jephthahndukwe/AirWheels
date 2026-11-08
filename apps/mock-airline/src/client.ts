@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { PARTNER_HEADERS, type PartnerBookingRequest, type PartnerFlightEvent } from '@airwheels/types';
+import {
+  PARTNER_HEADERS,
+  type PartnerBookingRequest,
+  type PartnerFlightEvent,
+} from '@airwheels/types';
 import { signPartnerRequest } from '@airwheels/types/signing';
 
 /**
@@ -10,8 +14,14 @@ const API = process.env.API_PUBLIC_URL ?? 'http://localhost:4000';
 const KEY_ID = process.env.MOCK_AIRLINE_KEY_ID ?? 'mock-key-1';
 const SECRET = process.env.MOCK_AIRLINE_SECRET ?? '';
 
-export async function partnerCall(method: string, path: string, body?: unknown, idempotencyKey?: string) {
-  if (!SECRET) throw new Error('MOCK_AIRLINE_SECRET is empty. Run `pnpm setup:env` and `pnpm db:seed`.');
+export async function partnerCall(
+  method: string,
+  path: string,
+  body?: unknown,
+  idempotencyKey?: string,
+) {
+  if (!SECRET)
+    throw new Error('MOCK_AIRLINE_SECRET is empty. Run `pnpm setup:env` and `pnpm db:seed`.');
   const raw = body === undefined ? '' : JSON.stringify(body);
   const ts = String(Date.now());
   const res = await fetch(`${API}${path}`, {
@@ -46,7 +56,10 @@ export const randomReference = () => randomUUID().replace(/-/g, '').slice(0, 6).
 /** A realistic Lagos booking: home in Lekki Phase 1 to the domestic terminal, and back. */
 export function sampleBooking(reference = randomReference()): PartnerBookingRequest {
   const date = tomorrow();
-  const airport = { text: 'Murtala Muhammed Airport, Domestic Terminal', location: { lat: 6.5774, lng: 3.3212 } };
+  const airport = {
+    text: 'Murtala Muhammed Airport, Domestic Terminal',
+    location: { lat: 6.5774, lng: 3.3212 },
+  };
   const home = {
     text: '12 Admiralty Way, Lekki Phase 1',
     location: { lat: 6.4474, lng: 3.4723 },
@@ -54,7 +67,12 @@ export function sampleBooking(reference = randomReference()): PartnerBookingRequ
   };
   return {
     airlineBookingReference: reference,
-    traveller: { name: 'Ada Obi', phone: '+2348012345678', whatsapp: true, email: 'ada@example.com' },
+    traveller: {
+      name: 'Ada Obi',
+      phone: '+2348012345678',
+      whatsapp: true,
+      email: 'ada@example.com',
+    },
     passengers: 1,
     bags: 2,
     rideType: 'PRIVATE',
@@ -93,7 +111,12 @@ export async function sendBooking(reference?: string) {
   const q = quote.body as { quoteId: string; totalKobo: number };
   booking.quoteId = q.quoteId;
   booking.paidAmountKobo = q.totalKobo;
-  const created = await partnerCall('POST', '/v1/partner/bookings', booking, `booking-${booking.airlineBookingReference}`);
+  const created = await partnerCall(
+    'POST',
+    '/v1/partner/bookings',
+    booking,
+    `booking-${booking.airlineBookingReference}`,
+  );
   return { step: 'booking', reference: booking.airlineBookingReference, quote: q, ...created };
 }
 
@@ -103,7 +126,9 @@ export const changeBooking = (ref: string) =>
   partnerCall('PATCH', `/v1/partner/bookings/${ref}`, { passengers: 2, bags: 3 });
 
 export const cancelBooking = (ref: string) =>
-  partnerCall('POST', `/v1/partner/bookings/${ref}/cancel`, { reason: 'Traveller cancelled the flight booking' });
+  partnerCall('POST', `/v1/partner/bookings/${ref}/cancel`, {
+    reason: 'Traveller cancelled the flight booking',
+  });
 
 export function flightAlert(type: PartnerFlightEvent['type'] = 'TIME_SHIFTED', delayMinutes = 45) {
   const date = tomorrow();
@@ -112,7 +137,9 @@ export function flightAlert(type: PartnerFlightEvent['type'] = 'TIME_SHIFTED', d
     date,
     type,
     estimatedDeparture:
-      type === 'TIME_SHIFTED' ? new Date(Date.parse(lagos(date, '09:30')) + delayMinutes * 60_000).toISOString() : undefined,
+      type === 'TIME_SHIFTED'
+        ? new Date(Date.parse(lagos(date, '09:30')) + delayMinutes * 60_000).toISOString()
+        : undefined,
     occurredAt: new Date().toISOString(),
   };
   return partnerCall('POST', '/v1/partner/flight-events', event);

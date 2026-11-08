@@ -32,7 +32,10 @@ export const OwnQuoteRequest = z.object({
     .array(OwnLegRequest)
     .min(1)
     .max(2)
-    .refine((l) => new Set(l.map((x) => x.type)).size === l.length, 'One departure and one arrival at most'),
+    .refine(
+      (l) => new Set(l.map((x) => x.type)).size === l.length,
+      'One departure and one arrival at most',
+    ),
   passengers: z.number().int().min(1).max(7),
   bags: z.number().int().min(0).max(12),
   rideType: RideType.default('PRIVATE'),
@@ -56,7 +59,9 @@ export const OwnBookingRequest = z.object({
   airlineBookingReference: z
     .string()
     .transform((v) => v.trim().toUpperCase())
-    .pipe(z.string().regex(/^[A-Z0-9]{5,12}$/, 'The booking reference has 5 to 12 letters and numbers')),
+    .pipe(
+      z.string().regex(/^[A-Z0-9]{5,12}$/, 'The booking reference has 5 to 12 letters and numbers'),
+    ),
   traveller: Traveller,
   channel: z.enum(['OWN_PAGE', 'LINK']).default('OWN_PAGE'),
 });
@@ -84,7 +89,13 @@ export interface QuoteResponse {
   vehicleClass: z.infer<typeof VehicleClass>;
   rideType: z.infer<typeof RideType>;
   plan: z.infer<typeof Plan>;
-  legs: { type: z.infer<typeof LegType>; amountKobo: number; pickupAt: string; lines: QuoteLine[]; flight: { number: string; date: string; departure: string; arrival: string } }[];
+  legs: {
+    type: z.infer<typeof LegType>;
+    amountKobo: number;
+    pickupAt: string;
+    lines: QuoteLine[];
+    flight: { number: string; date: string; departure: string; arrival: string };
+  }[];
 }
 
 export interface Place {

@@ -30,4 +30,9 @@ export const CONFIG = {
   paymentAbandonAfterHours: 'payments.abandonAfterHours',
   reconciliationHour: 'payments.reconciliationHourLagos',
   stuckBookingMinutes: 'bookings.stuckAfterMinutes',
+  travellerChangeRules: 'traveller.changeRules',
+  changeCode: 'traveller.changeCode',
+  travellerSupport: 'traveller.support',
+  messagingDelivery: 'messaging.delivery',
+  messagingTimings: 'messaging.timings',
 } as const;

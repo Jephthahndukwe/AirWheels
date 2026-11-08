@@ -17,15 +17,24 @@ export class ConfigStore {
   async get<T>(key: string): Promise<T> {
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return hit.value as T;
-    const row = await this.prisma.configEntry.findFirst({ where: { key }, orderBy: { version: 'desc' } });
-    if (!row) throw new NotFoundException(`Config key "${key}" is missing. Run the seed or add it in the admin.`);
+    const row = await this.prisma.configEntry.findFirst({
+      where: { key },
+      orderBy: { version: 'desc' },
+    });
+    if (!row)
+      throw new NotFoundException(
+        `Config key "${key}" is missing. Run the seed or add it in the admin.`,
+      );
     this.cache.set(key, { value: row.value, at: Date.now() });
     return row.value as T;
   }
 
   /** Writes a new version. Callers in the admin record the audit entry with before and after. */
   async set(key: string, value: unknown, updatedById?: string) {
-    const latest = await this.prisma.configEntry.findFirst({ where: { key }, orderBy: { version: 'desc' } });
+    const latest = await this.prisma.configEntry.findFirst({
+      where: { key },
+      orderBy: { version: 'desc' },
+    });
     const entry = await this.prisma.configEntry.create({
       data: {
         key,
@@ -40,7 +49,9 @@ export class ConfigStore {
   }
 
   async list() {
-    const rows = await this.prisma.configEntry.findMany({ orderBy: [{ key: 'asc' }, { version: 'desc' }] });
+    const rows = await this.prisma.configEntry.findMany({
+      orderBy: [{ key: 'asc' }, { version: 'desc' }],
+    });
     const latest = new Map<string, (typeof rows)[number]>();
     for (const r of rows) if (!latest.has(r.key)) latest.set(r.key, r);
     return [...latest.values()];

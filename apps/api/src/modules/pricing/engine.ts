@@ -18,7 +18,14 @@ import type { Plan, RideType, VehicleClass } from '@airwheels/types';
 export type CollectedBy = 'AIRLINE' | 'AIRWHEELS';
 
 export type Surcharge =
-  | { key: string; label: string; kind: 'TIME_OF_DAY'; startHour: number; endHour: number; bps: number }
+  | {
+      key: string;
+      label: string;
+      kind: 'TIME_OF_DAY';
+      startHour: number;
+      endHour: number;
+      bps: number;
+    }
   | { key: string; label: string; kind: 'DATE_RANGE'; from: string; to: string; bps: number };
 
 export interface VehicleClassRule {
@@ -173,7 +180,8 @@ export class QuoteError extends Error {
 }
 
 /** Basis points of an integer amount, rounded half up to whole kobo. */
-export const applyBps = (amountKobo: number, bps: number): number => Math.round((amountKobo * bps) / 10_000);
+export const applyBps = (amountKobo: number, bps: number): number =>
+  Math.round((amountKobo * bps) / 10_000);
 
 export function roundKobo(kobo: number, rule: PricingRules['rounding']): number {
   if (rule.toKobo <= 1) return kobo;
@@ -185,7 +193,8 @@ export function roundKobo(kobo: number, rule: PricingRules['rounding']): number 
 export const inHourWindow = (hour: number, start: number, end: number): boolean =>
   start <= end ? hour >= start && hour < end : hour >= start || hour < end;
 
-const inDateRange = (date: string, from?: string, to?: string) => (!from || date >= from) && (!to || date <= to);
+const inDateRange = (date: string, from?: string, to?: string) =>
+  (!from || date >= from) && (!to || date <= to);
 
 /** Shared limits (PRD 11.1): a booking for 3 or more is Private only, bags per passenger, corridor needed. */
 export function sharedProblem(input: QuoteInput, limits: SharedLimits): string | null {
@@ -199,18 +208,31 @@ export function sharedProblem(input: QuoteInput, limits: SharedLimits): string |
 
 const SHARED_MESSAGES: Record<string, string> = {
   SHARED_TOO_MANY_PASSENGERS: 'Shared rides are for bookings of up to 2 people. Choose Private.',
-  SHARED_TOO_MANY_BAGS: 'Shared rides allow 1 large and 1 small bag per person. Choose Private for more bags.',
+  SHARED_TOO_MANY_BAGS:
+    'Shared rides allow 1 large and 1 small bag per person. Choose Private for more bags.',
   SHARED_NO_EXTRA_STOPS: 'Extra stops are not available on shared rides.',
   SHARED_OUTSIDE_CORRIDOR: 'Shared rides are not available at this address yet. Choose Private.',
 };
 
 /** Vehicle class suggested from passengers and bags (CHN-09): the smallest class that fits. */
-export function suggestVehicleClass(passengers: number, bags: number, classes: PricingRules['vehicleClasses']): VehicleClass {
+export function suggestVehicleClass(
+  passengers: number,
+  bags: number,
+  classes: PricingRules['vehicleClasses'],
+): VehicleClass {
   const order: VehicleClass[] = ['SEDAN', 'SUV', 'VAN'];
-  return order.find((c) => passengers <= classes[c].maxPassengers && bags <= classes[c].maxBags) ?? 'VAN';
+  return (
+    order.find((c) => passengers <= classes[c].maxPassengers && bags <= classes[c].maxBags) ?? 'VAN'
+  );
 }
 
-function legCost(fareKobo: number, amountKobo: number, leg: LegQuoteInput, input: QuoteInput, rules: PricingRules): LegCost {
+function legCost(
+  fareKobo: number,
+  amountKobo: number,
+  leg: LegQuoteInput,
+  input: QuoteInput,
+  rules: PricingRules,
+): LegCost {
   const c = rules.cost;
   const km = Math.max(0, leg.distanceKm);
   const share = input.rideType === 'SHARED' ? c.sharedCostShareBps : 10_000;
@@ -226,8 +248,25 @@ function legCost(fareKobo: number, amountKobo: number, leg: LegQuoteInput, input
       : 0;
   const disruptionReserveKobo = applyBps(fareKobo, c.disruptionReserveBps[input.plan]);
   const totalKobo =
-    driverKobo + carPartnerKobo + energyKobo + insuranceKobo + messagingKobo + emptyReturnKobo + paymentFeeKobo + disruptionReserveKobo;
-  return { driverKobo, carPartnerKobo, energyKobo, insuranceKobo, messagingKobo, emptyReturnKobo, paymentFeeKobo, disruptionReserveKobo, totalKobo };
+    driverKobo +
+    carPartnerKobo +
+    energyKobo +
+    insuranceKobo +
+    messagingKobo +
+    emptyReturnKobo +
+    paymentFeeKobo +
+    disruptionReserveKobo;
+  return {
+    driverKobo,
+    carPartnerKobo,
+    energyKobo,
+    insuranceKobo,
+    messagingKobo,
+    emptyReturnKobo,
+    paymentFeeKobo,
+    disruptionReserveKobo,
+    totalKobo,
+  };
 }
 
 interface LegDraft {
@@ -239,7 +278,10 @@ interface LegDraft {
   ceilingKobo?: number;
 }
 
-function discountBps(input: QuoteInput, rules: PricingRules): { bps: number; flatKobo: number; lines: Line[] } {
+function discountBps(
+  input: QuoteInput,
+  rules: PricingRules,
+): { bps: number; flatKobo: number; lines: Line[] } {
   const d = rules.discounts;
   const lines: Line[] = [];
   let bps = 0;
@@ -252,8 +294,11 @@ function discountBps(input: QuoteInput, rules: PricingRules): { bps: number; fla
   if (input.promoCode && (!promo || !inDateRange(input.today, promo.validFrom, promo.validTo))) {
     throw new QuoteError('PROMO_INVALID', 'That promo code is not valid.');
   }
-  const corporate = input.corporateCode ? d.corporate[input.corporateCode.trim().toUpperCase()] : undefined;
-  if (input.corporateCode && !corporate) throw new QuoteError('CORPORATE_INVALID', 'That corporate code is not valid.');
+  const corporate = input.corporateCode
+    ? d.corporate[input.corporateCode.trim().toUpperCase()]
+    : undefined;
+  if (input.corporateCode && !corporate)
+    throw new QuoteError('CORPORATE_INVALID', 'That corporate code is not valid.');
 
   let promoBps = promo?.bps ?? 0;
   let promoFlat = promo?.flatKobo ?? 0;
@@ -265,7 +310,12 @@ function discountBps(input: QuoteInput, rules: PricingRules): { bps: number; fla
       promoFlat = 0;
     } else corpBps = 0;
   }
-  if (promoBps || promoFlat) lines.push({ code: 'discount.promo', label: `Promo ${input.promoCode!.toUpperCase()}`, amountKobo: 0 });
+  if (promoBps || promoFlat)
+    lines.push({
+      code: 'discount.promo',
+      label: `Promo ${input.promoCode!.toUpperCase()}`,
+      amountKobo: 0,
+    });
   if (corpBps) lines.push({ code: 'discount.corporate', label: 'Corporate rate', amountKobo: 0 });
   bps += promoBps + corpBps;
   flatKobo += promoFlat;
@@ -273,44 +323,81 @@ function discountBps(input: QuoteInput, rules: PricingRules): { bps: number; fla
 }
 
 export function computeQuote(input: QuoteInput, rules: PricingRules): QuoteResult {
-  if (input.legs.length < 1 || input.legs.length > 2) throw new QuoteError('LEGS_INVALID', 'A booking has one or two legs.');
+  if (input.legs.length < 1 || input.legs.length > 2)
+    throw new QuoteError('LEGS_INVALID', 'A booking has one or two legs.');
   const shared = sharedProblem(input, rules.sharedLimits);
   if (shared) throw new QuoteError(shared, SHARED_MESSAGES[shared]!);
-  const vehicleClass = input.rideType === 'SHARED' ? rules.sharedLimits.vehicleClass : input.vehicleClass;
+  const vehicleClass =
+    input.rideType === 'SHARED' ? rules.sharedLimits.vehicleClass : input.vehicleClass;
   const vc = rules.vehicleClasses[vehicleClass];
-  if (input.rideType === 'PRIVATE' && (input.passengers > vc.maxPassengers || input.bags > vc.maxBags)) {
-    throw new QuoteError('VEHICLE_TOO_SMALL', `A ${vehicleClass.toLowerCase()} does not fit ${input.passengers} passengers and ${input.bags} bags.`);
+  if (
+    input.rideType === 'PRIVATE' &&
+    (input.passengers > vc.maxPassengers || input.bags > vc.maxBags)
+  ) {
+    throw new QuoteError(
+      'VEHICLE_TOO_SMALL',
+      `A ${vehicleClass.toLowerCase()} does not fit ${input.passengers} passengers and ${input.bags} bags.`,
+    );
   }
 
   // Steps 1 to 7 per leg.
   const drafts: LegDraft[] = input.legs.map((leg) => {
     const base = rules.zoneFares[leg.zoneCode]?.[vehicleClass];
-    if (base === undefined) throw new QuoteError('OUTSIDE_SERVICE_AREA', `We do not serve ${leg.zoneCode} yet.`);
-    const lines: Line[] = [{ code: 'base', label: `Base fare (${vehicleClass.toLowerCase()})`, amountKobo: base }];
+    if (base === undefined)
+      throw new QuoteError('OUTSIDE_SERVICE_AREA', `We do not serve ${leg.zoneCode} yet.`);
+    const lines: Line[] = [
+      { code: 'base', label: `Base fare (${vehicleClass.toLowerCase()})`, amountKobo: base },
+    ];
 
     for (const s of rules.surcharges) {
       const hit =
-        s.kind === 'TIME_OF_DAY' ? inHourWindow(leg.localHour, s.startHour, s.endHour) : inDateRange(leg.localDate, s.from, s.to);
-      if (hit) lines.push({ code: `surcharge.${s.key}`, label: s.label, amountKobo: applyBps(base, s.bps) });
+        s.kind === 'TIME_OF_DAY'
+          ? inHourWindow(leg.localHour, s.startHour, s.endHour)
+          : inDateRange(leg.localDate, s.from, s.to);
+      if (hit)
+        lines.push({
+          code: `surcharge.${s.key}`,
+          label: s.label,
+          amountKobo: applyBps(base, s.bps),
+        });
     }
     if (input.rideType === 'PRIVATE') {
       const extraBags = Math.max(0, input.bags - vc.includedBags);
-      if (extraBags > 0) lines.push({ code: 'bags', label: `${extraBags} extra bag${extraBags > 1 ? 's' : ''}`, amountKobo: extraBags * vc.extraBagKobo });
+      if (extraBags > 0)
+        lines.push({
+          code: 'bags',
+          label: `${extraBags} extra bag${extraBags > 1 ? 's' : ''}`,
+          amountKobo: extraBags * vc.extraBagKobo,
+        });
     }
     if (input.extras.childSeats > 0) {
-      lines.push({ code: 'extra.child_seat', label: `Child seat x${input.extras.childSeats}`, amountKobo: input.extras.childSeats * rules.childSeatKobo });
+      lines.push({
+        code: 'extra.child_seat',
+        label: `Child seat x${input.extras.childSeats}`,
+        amountKobo: input.extras.childSeats * rules.childSeatKobo,
+      });
     }
     if (input.extras.extraStops > 0) {
-      lines.push({ code: 'extra.stop', label: `Extra stop x${input.extras.extraStops}`, amountKobo: input.extras.extraStops * rules.extraStopKobo });
+      lines.push({
+        code: 'extra.stop',
+        label: `Extra stop x${input.extras.extraStops}`,
+        amountKobo: input.extras.extraStops * rules.extraStopKobo,
+      });
     }
     const subtotal = lines.reduce((s, l) => s + l.amountKobo, 0);
 
     const planBps = rules.planMultiplierBps[input.plan];
     let fare = applyBps(subtotal, planBps);
-    if (fare !== subtotal) lines.push({ code: 'plan', label: `${input.plan === 'FLEX' ? 'Flex' : 'Standard'} plan`, amountKobo: fare - subtotal });
+    if (fare !== subtotal)
+      lines.push({
+        code: 'plan',
+        label: `${input.plan === 'FLEX' ? 'Flex' : 'Standard'} plan`,
+        amountKobo: fare - subtotal,
+      });
 
     if (input.rideType === 'SHARED') {
-      const shareBps = rules.sharedShareBps.byCorridor[leg.corridor!] ?? rules.sharedShareBps.default;
+      const shareBps =
+        rules.sharedShareBps.byCorridor[leg.corridor!] ?? rules.sharedShareBps.default;
       const sharedFare = applyBps(fare, shareBps);
       lines.push({ code: 'shared', label: 'Shared ride', amountKobo: sharedFare - fare });
       fare = sharedFare;
@@ -326,7 +413,10 @@ export function computeQuote(input: QuoteInput, rules: PricingRules): QuoteResul
   const flagReasons = new Set<string>();
 
   const priceLeg = (d: LegDraft, fareBeforeDiscount: number, flatKobo: number) => {
-    const discount = Math.min(fareBeforeDiscount, applyBps(fareBeforeDiscount, disc.bps) + flatKobo);
+    const discount = Math.min(
+      fareBeforeDiscount,
+      applyBps(fareBeforeDiscount, disc.bps) + flatKobo,
+    );
     let fare = fareBeforeDiscount - discount;
     const airportFeeKobo = rules.airportFeeKobo;
     // Step 9: tax, then round the leg total; the rounding difference goes to our fare so tax stays exact.
@@ -339,7 +429,18 @@ export function computeQuote(input: QuoteInput, rules: PricingRules): QuoteResul
     const cost = legCost(fare, amountKobo, d.leg, input, rules);
     const marginKobo = fare - cost.totalKobo - airlineShareKobo;
     const marginFloorKobo = applyBps(fare, rules.marginFloorBps);
-    return { fareBeforeDiscount, discount, fare, airportFeeKobo, taxKobo, amountKobo, airlineShareKobo, cost, marginKobo, marginFloorKobo };
+    return {
+      fareBeforeDiscount,
+      discount,
+      fare,
+      airportFeeKobo,
+      taxKobo,
+      amountKobo,
+      airlineShareKobo,
+      cost,
+      marginKobo,
+      marginFloorKobo,
+    };
   };
 
   const legs: LegQuote[] = drafts.map((d, i) => {
@@ -367,15 +468,28 @@ export function computeQuote(input: QuoteInput, rules: PricingRules): QuoteResul
     if (ceilingApplied) {
       lines.push({
         code: ceilingOverruled ? 'ceiling.overruled' : 'ceiling',
-        label: ceilingOverruled ? 'Price cap (partly lifted to cover costs)' : 'Price cap for this area',
+        label: ceilingOverruled
+          ? 'Price cap (partly lifted to cover costs)'
+          : 'Price cap for this area',
         amountKobo: priced.fareBeforeDiscount - d.fareBeforeCeiling,
       });
     }
-    if (priced.discount > 0) lines.push({ code: 'discount', label: disc.lines.map((l) => l.label).join(', ') || 'Discount', amountKobo: -priced.discount });
-    lines.push({ code: 'airport_fee', label: 'Airport fee (passed through at cost)', amountKobo: priced.airportFeeKobo });
-    if (priced.taxKobo > 0) lines.push({ code: 'tax', label: rules.tax.name, amountKobo: priced.taxKobo });
+    if (priced.discount > 0)
+      lines.push({
+        code: 'discount',
+        label: disc.lines.map((l) => l.label).join(', ') || 'Discount',
+        amountKobo: -priced.discount,
+      });
+    lines.push({
+      code: 'airport_fee',
+      label: 'Airport fee (passed through at cost)',
+      amountKobo: priced.airportFeeKobo,
+    });
+    if (priced.taxKobo > 0)
+      lines.push({ code: 'tax', label: rules.tax.name, amountKobo: priced.taxKobo });
     const listed = lines.reduce((s, l) => s + l.amountKobo, 0);
-    if (listed !== priced.amountKobo) lines.push({ code: 'rounding', label: 'Rounding', amountKobo: priced.amountKobo - listed });
+    if (listed !== priced.amountKobo)
+      lines.push({ code: 'rounding', label: 'Rounding', amountKobo: priced.amountKobo - listed });
 
     return {
       type: d.leg.type,

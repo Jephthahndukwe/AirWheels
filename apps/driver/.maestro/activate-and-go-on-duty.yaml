@@ -7,32 +7,32 @@
 appId: host.exp.Exponent # Expo Go. Use ng.airwheels.driver for a dev build.
 ---
 - launchApp
-- assertVisible: "Driver app. Invite only."
+- assertVisible: 'Driver app. Invite only.'
 - tapOn:
-    id: "activate"
+    id: 'activate'
 - tapOn:
-    id: "phone"
+    id: 'phone'
 - inputText: ${PHONE}
 - tapOn:
-    id: "send-code"
+    id: 'send-code'
 - copyTextFrom:
-    text: "Development only: your SMS code is .*"
+    text: 'Development only: your SMS code is .*'
 - tapOn:
-    id: "otp"
+    id: 'otp'
 - inputText: ${maestro.copiedText.slice(-6)}
 - tapOn:
-    id: "invite-code"
+    id: 'invite-code'
 - inputText: ${INVITE}
 - tapOn:
-    id: "activate-submit"
+    id: 'activate-submit'
 - tapOn:
-    id: "pin"
-- inputText: "482913"
+    id: 'pin'
+- inputText: '482913'
 - tapOn:
-    id: "pin2"
-- inputText: "482913"
+    id: 'pin2'
+- inputText: '482913'
 - tapOn:
-    id: "terms"
+    id: 'terms'
 - tapOn:
-    id: "pin-submit"
-- assertVisible: "You are off duty"
+    id: 'pin-submit'
+- assertVisible: 'You are off duty'

@@ -10,20 +10,36 @@ import { PrismaService } from '../../common/prisma.service';
 export class IdempotencyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async run<T>(scope: string, key: string | undefined, body: unknown, fn: () => Promise<T>): Promise<T> {
+  async run<T>(
+    scope: string,
+    key: string | undefined,
+    body: unknown,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     if (!key) return fn();
     const requestHash = sha256(JSON.stringify(body ?? null));
-    const existing = await this.prisma.idempotencyRecord.findUnique({ where: { scope_key: { scope, key } } });
+    const existing = await this.prisma.idempotencyRecord.findUnique({
+      where: { scope_key: { scope, key } },
+    });
     if (existing) {
       if (existing.requestHash !== requestHash) {
-        throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Key was used with a different body.' });
+        throw new ConflictException({
+          code: 'IDEMPOTENCY_KEY_REUSED',
+          message: 'Key was used with a different body.',
+        });
       }
       return existing.responseBody as T;
     }
     const result = await fn();
     await this.prisma.idempotencyRecord
       .create({
-        data: { scope, key, requestHash, responseCode: 200, responseBody: JSON.parse(JSON.stringify(result)) },
+        data: {
+          scope,
+          key,
+          requestHash,
+          responseCode: 200,
+          responseBody: JSON.parse(JSON.stringify(result)),
+        },
       })
       .catch(() => undefined); // a concurrent duplicate already stored it
     return result;

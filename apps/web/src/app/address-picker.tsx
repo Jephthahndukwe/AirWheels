@@ -25,13 +25,26 @@ const AREAS: [string, number, number][] = [
   ['Ajah', 6.468, 3.585],
   ['Airport', 6.577, 3.321],
 ];
-const toXY = (lat: number, lng: number) => ({ x: ((lng - BOX.west) / (BOX.east - BOX.west)) * 100, y: ((BOX.north - lat) / (BOX.north - BOX.south)) * 60 });
+const toXY = (lat: number, lng: number) => ({
+  x: ((lng - BOX.west) / (BOX.east - BOX.west)) * 100,
+  y: ((BOX.north - lat) / (BOX.north - BOX.south)) * 60,
+});
 
 /**
  * Address entry (CHN-07): Places search, "use my location", a pin you can drop on a small map of
  * Lagos, and a landmark note. Plain SVG, no map library, so it stays fast on low-end phones.
  */
-export function AddressPicker({ id, label, value, onChange }: { id: string; label: string; value: PickedAddress | null; onChange: (a: PickedAddress | null) => void }) {
+export function AddressPicker({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: PickedAddress | null;
+  onChange: (a: PickedAddress | null) => void;
+}) {
   const [query, setQuery] = useState(value?.text ?? '');
   const [results, setResults] = useState<Place[]>([]);
   const [open, setOpen] = useState(false);
@@ -78,9 +91,11 @@ export function AddressPicker({ id, label, value, onChange }: { id: string; labe
 
   const useMyLocation = () => {
     setNote(null);
-    if (!navigator.geolocation) return setNote('Your phone cannot share its location here. Search instead.');
+    if (!navigator.geolocation)
+      return setNote('Your phone cannot share its location here. Search instead.');
     navigator.geolocation.getCurrentPosition(
-      (pos) => void pin(Number(pos.coords.latitude.toFixed(6)), Number(pos.coords.longitude.toFixed(6))),
+      (pos) =>
+        void pin(Number(pos.coords.latitude.toFixed(6)), Number(pos.coords.longitude.toFixed(6))),
       () => setNote('Location is off. Search for the address or drop a pin.'),
       { enableHighAccuracy: false, timeout: 10_000 },
     );
@@ -115,10 +130,17 @@ export function AddressPicker({ id, label, value, onChange }: { id: string; labe
           aria-autocomplete="list"
         />
         {open && results.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-background shadow" role="listbox">
+          <ul
+            className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-background shadow"
+            role="listbox"
+          >
             {results.map((p) => (
               <li key={p.placeId}>
-                <button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => pick(p)}>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  onClick={() => pick(p)}
+                >
                   <span className="font-medium">{p.name}</span>
                   <span className="block text-xs text-muted-foreground">{p.description}</span>
                 </button>
@@ -128,18 +150,35 @@ export function AddressPicker({ id, label, value, onChange }: { id: string; labe
         )}
       </div>
       <div className="flex gap-3 text-sm">
-        <button type="button" className="font-medium text-primary underline" onClick={useMyLocation}>
+        <button
+          type="button"
+          className="font-medium text-primary underline"
+          onClick={useMyLocation}
+        >
           Use my location
         </button>
-        <button type="button" className="font-medium text-primary underline" onClick={() => setShowMap((s) => !s)}>
+        <button
+          type="button"
+          className="font-medium text-primary underline"
+          onClick={() => setShowMap((s) => !s)}
+        >
           {showMap ? 'Hide map' : 'Drop a pin on the map'}
         </button>
         {busy && <span className="text-muted-foreground">Finding the address…</span>}
       </div>
       {note && <p className="text-sm text-coral">{note}</p>}
       {showMap && (
-        <svg viewBox="0 0 100 60" className="w-full cursor-crosshair touch-manipulation rounded-md border border-border bg-muted" onClick={onMapTap} role="img" aria-label="Map of Lagos. Tap to drop a pin.">
-          <path d="M0 47 C 20 44, 40 52, 55 47 S 85 42, 100 46 L100 60 L0 60 Z" className="fill-sky-200" />
+        <svg
+          viewBox="0 0 100 60"
+          className="w-full cursor-crosshair touch-manipulation rounded-md border border-border bg-muted"
+          onClick={onMapTap}
+          role="img"
+          aria-label="Map of Lagos. Tap to drop a pin."
+        >
+          <path
+            d="M0 47 C 20 44, 40 52, 55 47 S 85 42, 100 46 L100 60 L0 60 Z"
+            className="fill-sky-200"
+          />
           {AREAS.map(([name, lat, lng]) => {
             const p = toXY(lat, lng);
             return (

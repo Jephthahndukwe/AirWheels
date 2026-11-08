@@ -36,8 +36,20 @@ interface Driver {
   activatedAt: string | null;
   activeSessions: number;
   vehicle: { id: string; plate: string; brand: string; model: string; colour: string } | null;
-  documents: { id: string; type: string; fileName: string | null; expiresAt: string | null; uploadedAt: string }[];
-  invites: { id: string; expiresAt: string; usedAt: string | null; revokedAt: string | null; createdAt: string }[];
+  documents: {
+    id: string;
+    type: string;
+    fileName: string | null;
+    expiresAt: string | null;
+    uploadedAt: string;
+  }[];
+  invites: {
+    id: string;
+    expiresAt: string;
+    usedAt: string | null;
+    revokedAt: string | null;
+    createdAt: string;
+  }[];
   checklist: {
     details: boolean;
     documents: { required: string[]; missing: string[] };
@@ -68,10 +80,15 @@ const TRAINING_LABEL: Record<string, string> = {
 export default async function DriverPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireMe();
   const { id } = await params;
-  const [d, vehicles] = await Promise.all([api<Driver>(`/v1/admin/drivers/${id}`), api<Vehicle[]>('/v1/admin/vehicles')]);
+  const [d, vehicles] = await Promise.all([
+    api<Driver>(`/v1/admin/drivers/${id}`),
+    api<Vehicle[]>('/v1/admin/vehicles'),
+  ]);
   const w = can.write(me);
   const c = d.checklist;
-  const pendingInvite = d.invites.find((i) => !i.usedAt && !i.revokedAt && new Date(i.expiresAt) > new Date());
+  const pendingInvite = d.invites.find(
+    (i) => !i.usedAt && !i.revokedAt && new Date(i.expiresAt) > new Date(),
+  );
 
   return (
     <div className="max-w-4xl">
@@ -106,28 +123,53 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="col-span-3">
             <dt className="text-slate">Referees</dt>
-            <dd>{d.referees?.length ? d.referees.map((r) => `${r.name} (${r.relationship}, ${r.phone})`).join('; ') : '—'}</dd>
+            <dd>
+              {d.referees?.length
+                ? d.referees.map((r) => `${r.name} (${r.relationship}, ${r.phone})`).join('; ')
+                : '—'}
+            </dd>
           </div>
         </dl>
       </Card>
 
       <Card title="2. Documents (private storage)" done={c.documents.missing.length === 0}>
-        {c.documents.missing.length > 0 && <p className="mb-3 text-sm text-coral">Still needed: {c.documents.missing.join(', ')}</p>}
+        {c.documents.missing.length > 0 && (
+          <p className="mb-3 text-sm text-coral">Still needed: {c.documents.missing.join(', ')}</p>
+        )}
         {d.documents.length > 0 && (
           <ul className="mb-4 space-y-1 text-sm">
             {d.documents.map((doc) => (
               <li key={doc.id} className="flex items-center gap-3">
-                <Badge>{doc.type}</Badge> {doc.fileName} <span className="text-slate">uploaded {lagosTime(doc.uploadedAt)}</span>
-                {doc.expiresAt && <span className="text-slate">expires {lagosTime(doc.expiresAt)}</span>}
+                <Badge>{doc.type}</Badge> {doc.fileName}{' '}
+                <span className="text-slate">uploaded {lagosTime(doc.uploadedAt)}</span>
+                {doc.expiresAt && (
+                  <span className="text-slate">expires {lagosTime(doc.expiresAt)}</span>
+                )}
                 {w && <ViewDocument action={viewDocument.bind(null, doc.id)} label="View" />}
               </li>
             ))}
           </ul>
         )}
         {w && (
-          <ActionForm action={uploadDocument.bind(null, d.id)} className="grid grid-cols-4 items-end gap-3">
-            <Select label="Type" name="type" options={['LICENCE', 'ID', 'PHOTO', 'REFEREE', 'INSURANCE', 'OTHER'].map((t) => [t, t.toLowerCase()])} />
-            <Field label="File (PDF, JPEG or PNG, up to 10 MB)" name="file" type="file" accept="application/pdf,image/jpeg,image/png" required />
+          <ActionForm
+            action={uploadDocument.bind(null, d.id)}
+            className="grid grid-cols-4 items-end gap-3"
+          >
+            <Select
+              label="Type"
+              name="type"
+              options={['LICENCE', 'ID', 'PHOTO', 'REFEREE', 'INSURANCE', 'OTHER'].map((t) => [
+                t,
+                t.toLowerCase(),
+              ])}
+            />
+            <Field
+              label="File (PDF, JPEG or PNG, up to 10 MB)"
+              name="file"
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              required
+            />
             <Field label="Expires (optional)" name="expiresAt" type="date" />
             <div>
               <Submit>Upload</Submit>
@@ -140,18 +182,33 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
         <p className="mb-3 text-sm">
           {d.kycResult ? (
             <>
-              Last check: {d.kycResult.passed ? <Badge tone="good">passed</Badge> : <Badge tone="bad">failed</Badge>} reference{' '}
-              <span className="font-mono">{d.kycResult.reference}</span>, {lagosTime(d.kycResult.checkedAt)}
+              Last check:{' '}
+              {d.kycResult.passed ? (
+                <Badge tone="good">passed</Badge>
+              ) : (
+                <Badge tone="bad">failed</Badge>
+              )}{' '}
+              reference <span className="font-mono">{d.kycResult.reference}</span>,{' '}
+              {lagosTime(d.kycResult.checkedAt)}
             </>
           ) : (
             'Not checked yet.'
           )}
         </p>
-        {w && <ActionButton action={runKyc.bind(null, d.id)} label={d.kycResult ? 'Run KYC again' : 'Run KYC check'} />}
+        {w && (
+          <ActionButton
+            action={runKyc.bind(null, d.id)}
+            label={d.kycResult ? 'Run KYC again' : 'Run KYC check'}
+          />
+        )}
       </Card>
 
       <Card title="4. Vehicle" done={c.vehicle}>
-        <p className="mb-3 text-sm">{d.vehicle ? `${d.vehicle.plate}, ${d.vehicle.colour} ${d.vehicle.brand} ${d.vehicle.model}` : 'No vehicle assigned.'}</p>
+        <p className="mb-3 text-sm">
+          {d.vehicle
+            ? `${d.vehicle.plate}, ${d.vehicle.colour} ${d.vehicle.brand} ${d.vehicle.model}`
+            : 'No vehicle assigned.'}
+        </p>
         {w && (
           <ActionForm action={assignVehicle.bind(null, d.id)} className="flex items-end gap-3">
             <div className="w-96">
@@ -160,7 +217,10 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
                 name="vehicleId"
                 options={vehicles
                   .filter((v) => v.active)
-                  .map((v) => [v.id, `${v.plate} · ${v.brand} ${v.model} (${v.class.toLowerCase()})${v.assignments[0] && v.assignments[0].driver.id !== d.id ? ` · with ${v.assignments[0].driver.firstName}` : ''}`])}
+                  .map((v) => [
+                    v.id,
+                    `${v.plate} · ${v.brand} ${v.model} (${v.class.toLowerCase()})${v.assignments[0] && v.assignments[0].driver.id !== d.id ? ` · with ${v.assignments[0].driver.firstName}` : ''}`,
+                  ])}
               />
             </div>
             <Submit>Assign</Submit>
@@ -175,7 +235,12 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
         <ActionForm action={saveTraining.bind(null, d.id, c.training.items)} className="space-y-2">
           {c.training.items.map((item) => (
             <label key={item} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name={item} defaultChecked={d.trainingChecklist?.[item] === true} disabled={!w} />
+              <input
+                type="checkbox"
+                name={item}
+                defaultChecked={d.trainingChecklist?.[item] === true}
+                disabled={!w}
+              />
               {TRAINING_LABEL[item] ?? item}
             </label>
           ))}
@@ -186,7 +251,8 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
       <Card title="6. Invite" done={['ACTIVATED', 'ACTIVE'].includes(d.status) || !!pendingInvite}>
         {d.status === 'ACTIVE' ? (
           <p className="text-sm">
-            Activated {lagosTime(d.activatedAt)}. PIN set, bound to device <span className="font-mono text-xs">{d.deviceId}</span>.
+            Activated {lagosTime(d.activatedAt)}. PIN set, bound to device{' '}
+            <span className="font-mono text-xs">{d.deviceId}</span>.
           </p>
         ) : (
           <>
@@ -199,8 +265,20 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
             </p>
             {w && d.status !== 'SUSPENDED' && (
               <div className="flex gap-3">
-                {c.readyToInvite && <ActionButton action={sendDriverInvite.bind(null, d.id)} label={pendingInvite ? 'Resend invite' : 'Send invite'} variant="primary" />}
-                {pendingInvite && <ActionButton action={revokeDriverInvite.bind(null, d.id)} label="Revoke invite" variant="danger" />}
+                {c.readyToInvite && (
+                  <ActionButton
+                    action={sendDriverInvite.bind(null, d.id)}
+                    label={pendingInvite ? 'Resend invite' : 'Send invite'}
+                    variant="primary"
+                  />
+                )}
+                {pendingInvite && (
+                  <ActionButton
+                    action={revokeDriverInvite.bind(null, d.id)}
+                    label="Revoke invite"
+                    variant="danger"
+                  />
+                )}
               </div>
             )}
           </>
@@ -213,7 +291,10 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
             <>
               <p className="mb-3 text-sm">Reason: {d.suspendedReason}</p>
               {can.superAdmin(me) ? (
-                <ActionForm action={reactivateDriver.bind(null, d.id)} className="flex items-end gap-3">
+                <ActionForm
+                  action={reactivateDriver.bind(null, d.id)}
+                  className="flex items-end gap-3"
+                >
                   <div className="w-96">
                     <Field label="Reason for reactivating" name="reason" required minLength={3} />
                   </div>
@@ -224,7 +305,11 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
               )}
             </>
           ) : (
-            <ActionForm action={suspendDriver.bind(null, d.id)} className="flex items-end gap-3" confirm="Suspend this driver? They are signed out of the app at once and cannot take jobs.">
+            <ActionForm
+              action={suspendDriver.bind(null, d.id)}
+              className="flex items-end gap-3"
+              confirm="Suspend this driver? They are signed out of the app at once and cannot take jobs."
+            >
               <div className="w-96">
                 <Field label="Reason" name="reason" required minLength={3} />
               </div>
@@ -239,12 +324,23 @@ export default async function DriverPage({ params }: { params: Promise<{ id: str
           See this driver&apos;s audit trail
         </Link>
       </p>
-      <Table head={['Invite sent', 'Expires', 'Result']} empty={d.invites.length === 0 && 'No invites yet.'}>
+      <Table
+        head={['Invite sent', 'Expires', 'Result']}
+        empty={d.invites.length === 0 && 'No invites yet.'}
+      >
         {d.invites.map((i) => (
           <tr key={i.id}>
             <Td>{lagosTime(i.createdAt)}</Td>
             <Td>{lagosTime(i.expiresAt)}</Td>
-            <Td>{i.usedAt ? `used ${lagosTime(i.usedAt)}` : i.revokedAt ? 'revoked' : new Date(i.expiresAt) < new Date() ? 'expired' : 'waiting'}</Td>
+            <Td>
+              {i.usedAt
+                ? `used ${lagosTime(i.usedAt)}`
+                : i.revokedAt
+                  ? 'revoked'
+                  : new Date(i.expiresAt) < new Date()
+                    ? 'expired'
+                    : 'waiting'}
+            </Td>
           </tr>
         ))}
       </Table>

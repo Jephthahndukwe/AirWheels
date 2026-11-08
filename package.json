@@ -23,7 +23,8 @@
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
     "dev:apps": "turbo run dev --filter=!@airwheels/driver --filter=!@airwheels/types --filter=!@airwheels/ui --filter=!@airwheels/api-client",
-    "admin:create-super": "pnpm --filter @airwheels/api admin:create-super"
+    "admin:create-super": "pnpm --filter @airwheels/api admin:create-super",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

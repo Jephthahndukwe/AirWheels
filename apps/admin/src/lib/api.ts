@@ -30,11 +30,17 @@ export class ApiError extends Error {
 async function forwarded() {
   const h = await headers();
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? undefined;
-  return { ...(ip ? { 'x-forwarded-for': ip } : {}), 'user-agent': h.get('user-agent') ?? 'airwheels-admin' };
+  return {
+    ...(ip ? { 'x-forwarded-for': ip } : {}),
+    'user-agent': h.get('user-agent') ?? 'airwheels-admin',
+  };
 }
 
 /** Raw call. Returns status and parsed body; never throws on HTTP errors. */
-export async function apiRaw(path: string, init: { method?: string; body?: unknown; token?: string | null } = {}) {
+export async function apiRaw(
+  path: string,
+  init: { method?: string; body?: unknown; token?: string | null } = {},
+) {
   const jar = await cookies();
   const token = init.token === undefined ? jar.get(SESSION_COOKIE)?.value : init.token;
   const res = await fetch(`${API_URL}${path}`, {
@@ -58,12 +64,17 @@ export async function apiRaw(path: string, init: { method?: string; body?: unkno
 }
 
 /** Authenticated call for pages and actions. A 401 sends the user to sign in again. */
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
   const r = await apiRaw(path, init);
   if (r.status === 401) redirect('/login?expired=1');
   if (r.status >= 400) {
     const d = (r.data ?? {}) as { code?: string; message?: string | string[] };
-    const message = Array.isArray(d.message) ? d.message.join(', ') : (d.message ?? `Request failed (${r.status})`);
+    const message = Array.isArray(d.message)
+      ? d.message.join(', ')
+      : (d.message ?? `Request failed (${r.status})`);
     throw new ApiError(r.status, d.code ?? 'ERROR', message);
   }
   return r.data as T;
@@ -106,6 +117,12 @@ export const can = {
 /** Turns an action failure into a message on the same page. */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  if (e && typeof e === 'object' && 'digest' in e && String((e as { digest: string }).digest).startsWith('NEXT_REDIRECT')) throw e;
+  if (
+    e &&
+    typeof e === 'object' &&
+    'digest' in e &&
+    String((e as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+  )
+    throw e;
   return 'Something went wrong. Try again.';
 }

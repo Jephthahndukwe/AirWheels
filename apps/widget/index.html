@@ -5,12 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mock Air checkout (widget host page)</title>
     <style>
-      body { font-family: Arial, sans-serif; background: #eef1f7; margin: 0; }
-      header { background: #1d3e8a; color: #fff; padding: 16px 24px; font-weight: bold; }
-      main { max-width: 560px; margin: 24px auto; padding: 0 16px; }
-      section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-      .muted { color: #555; font-size: 14px; }
-      #log { font-family: monospace; font-size: 12px; color: #333; }
+      body {
+        font-family: Arial, sans-serif;
+        background: #eef1f7;
+        margin: 0;
+      }
+      header {
+        background: #1d3e8a;
+        color: #fff;
+        padding: 16px 24px;
+        font-weight: bold;
+      }
+      main {
+        max-width: 560px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      section {
+        background: #fff;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .muted {
+        color: #555;
+        font-size: 14px;
+      }
+      #log {
+        font-family: monospace;
+        font-size: 12px;
+        color: #333;
+      }
     </style>
   </head>
   <body>
@@ -35,7 +60,8 @@
       mount({
         el: '#airwheels-transfer',
         airline: 'MOCK',
-        onChange: (s) => (document.getElementById('log').textContent = 'Widget state: ' + JSON.stringify(s)),
+        onChange: (s) =>
+          (document.getElementById('log').textContent = 'Widget state: ' + JSON.stringify(s)),
       });
     </script>
   </body>

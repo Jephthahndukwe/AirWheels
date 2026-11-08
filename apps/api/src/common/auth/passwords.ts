@@ -8,7 +8,10 @@ const OPTIONS = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
 export const hashSecret = (plain: string): Promise<string> => hash(plain, OPTIONS);
 
-export async function verifySecret(stored: string | null | undefined, plain: string): Promise<boolean> {
+export async function verifySecret(
+  stored: string | null | undefined,
+  plain: string,
+): Promise<boolean> {
   if (!stored) {
     // Spend the same time when there is no account, so timing does not reveal which accounts exist.
     await hash(plain, OPTIONS);
@@ -34,6 +37,7 @@ export function passwordProblem(pw: string): string | null {
 export function pinProblem(pin: string): string | null {
   if (!/^\d{6}$/.test(pin)) return 'The PIN must be exactly six digits.';
   if (/^(\d)\1{5}$/.test(pin)) return 'Do not repeat one digit.';
-  if ('0123456789'.includes(pin) || '9876543210'.includes(pin)) return 'Do not use a straight run of digits.';
+  if ('0123456789'.includes(pin) || '9876543210'.includes(pin))
+    return 'Do not use a straight run of digits.';
   return null;
 }

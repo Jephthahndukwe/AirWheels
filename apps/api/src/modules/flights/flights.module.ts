@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { FlightSegment } from '@airwheels/types';
 import { PrismaService } from '../../common/prisma.service';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
+import { MessagingModule, MessagingService } from '../messaging/messaging.module';
 
 type Segment = z.infer<typeof FlightSegment>;
 
@@ -28,6 +29,7 @@ export class FlightsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
+    private readonly messaging: MessagingService,
   ) {}
 
   async upsertFromSegment(tx: Prisma.TransactionClient, seg: Segment, airlineCode: string) {
@@ -66,7 +68,10 @@ export class FlightsService {
       include: { snapshots: { orderBy: { observedAt: 'desc' }, take: 1 } },
     });
     if (!flight) {
-      this.log.warn({ flight: e.flightNumber, date: e.date }, 'Alert for a flight with no bookings; ignored');
+      this.log.warn(
+        { flight: e.flightNumber, date: e.date },
+        'Alert for a flight with no bookings; ignored',
+      );
       return { accepted: true, matchedBookings: 0 };
     }
     const prev = flight.snapshots[0];
@@ -88,14 +93,48 @@ export class FlightsService {
         observedAt: new Date(e.occurredAt),
       },
     });
-    const legs = await this.prisma.rideLeg.findMany({ where: { flightId: flight.id }, select: { bookingId: true } });
+    const legs = await this.prisma.rideLeg.findMany({
+      where: { flightId: flight.id, status: { notIn: ['CANCELLED', 'COMPLETED', 'NO_SHOW'] } },
+      select: { id: true, bookingId: true, type: true, booking: { select: { status: true } } },
+    });
+    // Traveller messages (PRD 7.1): welcome on landing, change notice on a delay or cancellation.
+    // Pickup times and fees move with the policy engine in M7; until then ops handles the options.
+    const reason: Partial<Record<PartnerFlightEvent['type'], string>> = {
+      TIME_SHIFTED: 'delayed',
+      CANCELLED: 'cancelled',
+      DIVERTED: 'diverted',
+      REBOOKED: 'rebooked',
+    };
+    for (const leg of legs) {
+      if (!['CONFIRMED', 'IN_PROGRESS'].includes(leg.booking.status)) continue;
+      const instance = `${e.type}${new Date(e.occurredAt).getTime()}`;
+      if (e.type === 'LANDED' && leg.type === 'ARRIVAL')
+        await this.messaging.notify('flight.landed', { bookingId: leg.bookingId, legId: leg.id });
+      else if (reason[e.type])
+        await this.messaging.notify('flight.changed', {
+          bookingId: leg.bookingId,
+          legId: leg.id,
+          instance,
+          extra: {
+            reason: reason[e.type]!,
+            options:
+              e.type === 'CANCELLED'
+                ? 'You can cancel free or move to your new flight.'
+                : 'We will move your pickup to match.',
+            cost: 'none',
+          },
+        });
+    }
     for (const { bookingId } of legs) {
-      this.realtime.emit(`booking:${bookingId}`, 'flight.updated', { flightNumber: e.flightNumber, status: snapshot.status });
+      this.realtime.emit(`booking:${bookingId}`, 'flight.updated', {
+        flightNumber: e.flightNumber,
+        status: snapshot.status,
+      });
     }
     this.realtime.emit('ops', 'flight.updated', { flightNumber: e.flightNumber, type: e.type });
     return { accepted: true, matchedBookings: legs.length };
   }
 }
 
-@Module({ providers: [FlightsService], exports: [FlightsService] })
+@Module({ imports: [MessagingModule], providers: [FlightsService], exports: [FlightsService] })
 export class FlightsModule {}

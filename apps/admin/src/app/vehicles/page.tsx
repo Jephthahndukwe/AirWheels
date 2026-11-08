@@ -36,18 +36,57 @@ export default async function Vehicles() {
             <Field label="Brand" name="brand" required />
             <Field label="Model" name="model" required />
             <Field label="Colour" name="colour" required />
-            <Select label="Class" name="class" options={[['SEDAN', 'Sedan'], ['SUV', 'SUV'], ['VAN', 'Van']]} />
-            <Field label="Seats" name="seats" type="number" min={1} max={15} defaultValue={4} required />
-            <Field label="Bags" name="bagCapacity" type="number" min={0} max={20} defaultValue={3} required />
-            <Select label="Power" name="powerType" options={[['ELECTRIC', 'Electric'], ['HYBRID', 'Hybrid'], ['PETROL', 'Petrol']]} />
-            <Select label="Car partner" name="partnerId" options={[['', 'None'], ...partners.map((p): [string, string] => [p.id, p.name])]} />
+            <Select
+              label="Class"
+              name="class"
+              options={[
+                ['SEDAN', 'Sedan'],
+                ['SUV', 'SUV'],
+                ['VAN', 'Van'],
+              ]}
+            />
+            <Field
+              label="Seats"
+              name="seats"
+              type="number"
+              min={1}
+              max={15}
+              defaultValue={4}
+              required
+            />
+            <Field
+              label="Bags"
+              name="bagCapacity"
+              type="number"
+              min={0}
+              max={20}
+              defaultValue={3}
+              required
+            />
+            <Select
+              label="Power"
+              name="powerType"
+              options={[
+                ['ELECTRIC', 'Electric'],
+                ['HYBRID', 'Hybrid'],
+                ['PETROL', 'Petrol'],
+              ]}
+            />
+            <Select
+              label="Car partner"
+              name="partnerId"
+              options={[['', 'None'], ...partners.map((p): [string, string] => [p.id, p.name])]}
+            />
             <div>
               <Submit>Add vehicle</Submit>
             </div>
           </ActionForm>
         </Card>
       )}
-      <Table head={['Plate', 'Vehicle', 'Class', 'Seats / bags', 'Power', 'Partner', 'Driver']} empty={vehicles.length === 0 && 'No vehicles yet.'}>
+      <Table
+        head={['Plate', 'Vehicle', 'Class', 'Seats / bags', 'Power', 'Partner', 'Driver']}
+        empty={vehicles.length === 0 && 'No vehicles yet.'}
+      >
         {vehicles.map((v) => (
           <tr key={v.id}>
             <Td mono>{v.plate}</Td>

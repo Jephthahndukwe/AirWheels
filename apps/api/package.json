@@ -17,7 +17,8 @@
     "secrets:rotate": "prisma generate && dotenv-cli -e ../../.env -- tsx prisma/rotate-secrets.ts",
     "admin:create-super": "dotenv-cli -e ../../.env -- node dist/cli/create-super-admin.js",
     "flow:m1": "dotenv-cli -e ../../.env -- tsx scripts/m1-flow.ts",
-    "flow:m2": "dotenv-cli -e ../../.env -- tsx scripts/m2-flow.ts"
+    "flow:m2": "dotenv-cli -e ../../.env -- tsx scripts/m2-flow.ts",
+    "flow:m3": "dotenv-cli -e ../../.env -- tsx scripts/m3-flow.ts"
   },
   "dependencies": {
     "@airwheels/types": "workspace:*",

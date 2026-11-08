@@ -51,7 +51,9 @@ export class LedgerService {
     } catch (e) {
       // A concurrent identical posting won the race: it is already in the ledger.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const existing = await this.prisma.ledgerTransaction.findUniqueOrThrow({ where: { reference: p.reference } });
+        const existing = await this.prisma.ledgerTransaction.findUniqueOrThrow({
+          where: { reference: p.reference },
+        });
         return { transactionId: existing.id, created: false };
       }
       throw e;
@@ -78,19 +80,35 @@ export class LedgerService {
 
   /** Balance per account (debits minus credits for assets and expenses, the other way round otherwise). */
   async balances() {
-    const sums = await this.prisma.ledgerEntry.groupBy({ by: ['accountId', 'direction'], _sum: { amountKobo: true } });
+    const sums = await this.prisma.ledgerEntry.groupBy({
+      by: ['accountId', 'direction'],
+      _sum: { amountKobo: true },
+    });
     const accounts = await this.prisma.ledgerAccount.findMany({ orderBy: { code: 'asc' } });
     return accounts.map((a) => {
-      const get = (d: 'DEBIT' | 'CREDIT') => Number(sums.find((s) => s.accountId === a.id && s.direction === d)?._sum.amountKobo ?? 0n);
+      const get = (d: 'DEBIT' | 'CREDIT') =>
+        Number(sums.find((s) => s.accountId === a.id && s.direction === d)?._sum.amountKobo ?? 0n);
       const debitNormal = a.type === 'ASSET' || a.type === 'EXPENSE';
-      return { code: a.code, name: a.name, type: a.type, balanceKobo: debitNormal ? get('DEBIT') - get('CREDIT') : get('CREDIT') - get('DEBIT') };
+      return {
+        code: a.code,
+        name: a.name,
+        type: a.type,
+        balanceKobo: debitNormal ? get('DEBIT') - get('CREDIT') : get('CREDIT') - get('DEBIT'),
+      };
     });
   }
 
   /** Whole-ledger check used by reconciliation: total debits equal total credits. */
   async trialBalance() {
-    const sums = await this.prisma.ledgerEntry.groupBy({ by: ['direction'], _sum: { amountKobo: true } });
+    const sums = await this.prisma.ledgerEntry.groupBy({
+      by: ['direction'],
+      _sum: { amountKobo: true },
+    });
     const get = (d: string) => Number(sums.find((s) => s.direction === d)?._sum.amountKobo ?? 0n);
-    return { debitsKobo: get('DEBIT'), creditsKobo: get('CREDIT'), balanced: get('DEBIT') === get('CREDIT') };
+    return {
+      debitsKobo: get('DEBIT'),
+      creditsKobo: get('CREDIT'),
+      balanced: get('DEBIT') === get('CREDIT'),
+    };
   }
 }

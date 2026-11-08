@@ -37,7 +37,10 @@ export async function revokeStaffInvite(id: string): Promise<ActionState> {
   });
 }
 
-export async function updateStaff(id: string, body: { role?: string; disabled?: boolean; unlock?: boolean }): Promise<ActionState> {
+export async function updateStaff(
+  id: string,
+  body: { role?: string; disabled?: boolean; unlock?: boolean },
+): Promise<ActionState> {
   return run('/staff', async () => {
     await api(`/v1/admin/staff/${id}`, { method: 'PATCH', body });
   });
@@ -49,7 +52,11 @@ export async function createDriver(_p: ActionState, f: FormData): Promise<Action
   let id: string;
   try {
     const referees = [1, 2]
-      .map((i) => ({ name: s(f, `ref${i}Name`), phone: s(f, `ref${i}Phone`), relationship: s(f, `ref${i}Rel`) }))
+      .map((i) => ({
+        name: s(f, `ref${i}Name`),
+        phone: s(f, `ref${i}Phone`),
+        relationship: s(f, `ref${i}Rel`),
+      }))
       .filter((r) => r.name);
     const d = await api<{ id: string }>('/v1/admin/drivers', {
       method: 'POST',
@@ -71,17 +78,36 @@ export async function createDriver(_p: ActionState, f: FormData): Promise<Action
   redirect(`/drivers/${id}`);
 }
 
-export async function uploadDocument(driverId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function uploadDocument(
+  driverId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
     const file = f.get('file');
-    if (!(file instanceof File) || file.size === 0) throw new ApiError(400, 'NO_FILE', 'Choose a file.');
-    const req = await api<{ documentId: string; uploadUrl: string; maxBytes: number }>(`/v1/admin/drivers/${driverId}/documents`, {
-      method: 'POST',
-      body: { type: s(f, 'type'), fileName: file.name, contentType: file.type, expiresAt: opt(f, 'expiresAt') },
+    if (!(file instanceof File) || file.size === 0)
+      throw new ApiError(400, 'NO_FILE', 'Choose a file.');
+    const req = await api<{ documentId: string; uploadUrl: string; maxBytes: number }>(
+      `/v1/admin/drivers/${driverId}/documents`,
+      {
+        method: 'POST',
+        body: {
+          type: s(f, 'type'),
+          fileName: file.name,
+          contentType: file.type,
+          expiresAt: opt(f, 'expiresAt'),
+        },
+      },
+    );
+    if (file.size > req.maxBytes)
+      throw new ApiError(400, 'FILE_TOO_LARGE', 'Files must be 10 MB or smaller.');
+    const put = await fetch(req.uploadUrl, {
+      method: 'PUT',
+      headers: { 'content-type': file.type },
+      body: Buffer.from(await file.arrayBuffer()),
     });
-    if (file.size > req.maxBytes) throw new ApiError(400, 'FILE_TOO_LARGE', 'Files must be 10 MB or smaller.');
-    const put = await fetch(req.uploadUrl, { method: 'PUT', headers: { 'content-type': file.type }, body: Buffer.from(await file.arrayBuffer()) });
-    if (!put.ok) throw new ApiError(put.status, 'UPLOAD_FAILED', 'Upload to storage failed. Try again.');
+    if (!put.ok)
+      throw new ApiError(put.status, 'UPLOAD_FAILED', 'Upload to storage failed. Try again.');
     await api(`/v1/admin/documents/${req.documentId}/confirm`, { method: 'POST' });
     return `${s(f, 'type')} uploaded.`;
   });
@@ -94,20 +120,36 @@ export async function viewDocument(id: string): Promise<string> {
 
 export async function runKyc(driverId: string): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
-    const r = await api<{ passed: boolean; reference: string }>(`/v1/admin/drivers/${driverId}/kyc`, { method: 'POST' });
-    if (!r.passed) throw new ApiError(400, 'KYC_FAILED', `KYC did not pass (reference ${r.reference}).`);
+    const r = await api<{ passed: boolean; reference: string }>(
+      `/v1/admin/drivers/${driverId}/kyc`,
+      { method: 'POST' },
+    );
+    if (!r.passed)
+      throw new ApiError(400, 'KYC_FAILED', `KYC did not pass (reference ${r.reference}).`);
     return `KYC passed (reference ${r.reference}).`;
   });
 }
 
-export async function assignVehicle(driverId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function assignVehicle(
+  driverId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
-    await api(`/v1/admin/drivers/${driverId}/vehicle`, { method: 'PUT', body: { vehicleId: s(f, 'vehicleId') } });
+    await api(`/v1/admin/drivers/${driverId}/vehicle`, {
+      method: 'PUT',
+      body: { vehicleId: s(f, 'vehicleId') },
+    });
     return 'Vehicle assigned.';
   });
 }
 
-export async function saveTraining(driverId: string, items: string[], _p: ActionState, f: FormData): Promise<ActionState> {
+export async function saveTraining(
+  driverId: string,
+  items: string[],
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
     await api(`/v1/admin/drivers/${driverId}/training`, {
       method: 'PUT',
@@ -119,7 +161,10 @@ export async function saveTraining(driverId: string, items: string[], _p: Action
 
 export async function sendDriverInvite(driverId: string): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
-    const r = await api<{ expiresAt: string; devCode?: string }>(`/v1/admin/drivers/${driverId}/invite`, { method: 'POST' });
+    const r = await api<{ expiresAt: string; devCode?: string }>(
+      `/v1/admin/drivers/${driverId}/invite`,
+      { method: 'POST' },
+    );
     return `Invite sent by SMS. It expires ${new Date(r.expiresAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })}.${r.devCode ? `\nDevelopment only, invite code: ${r.devCode}` : ''}`;
   });
 }
@@ -131,16 +176,30 @@ export async function revokeDriverInvite(driverId: string): Promise<ActionState>
   });
 }
 
-export async function suspendDriver(driverId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function suspendDriver(
+  driverId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
-    const r = await api<{ sessionsEnded: number }>(`/v1/admin/drivers/${driverId}/suspend`, { method: 'POST', body: { reason: s(f, 'reason') } });
+    const r = await api<{ sessionsEnded: number }>(`/v1/admin/drivers/${driverId}/suspend`, {
+      method: 'POST',
+      body: { reason: s(f, 'reason') },
+    });
     return `Driver suspended. ${r.sessionsEnded} session(s) signed out.`;
   });
 }
 
-export async function reactivateDriver(driverId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function reactivateDriver(
+  driverId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/drivers/${driverId}`, async () => {
-    const r = await api<{ status: string }>(`/v1/admin/drivers/${driverId}/reactivate`, { method: 'POST', body: { reason: s(f, 'reason') } });
+    const r = await api<{ status: string }>(`/v1/admin/drivers/${driverId}/reactivate`, {
+      method: 'POST',
+      body: { reason: s(f, 'reason') },
+    });
     return `Driver is now ${r.status.toLowerCase()}.`;
   });
 }
@@ -178,14 +237,25 @@ const ipList = (f: FormData) =>
 const secretMessage = (r: { keyId: string; secret: string; oldKeyExpiresAt?: string }) =>
   `New key ${r.keyId}\nSecret (shown once, copy it now): ${r.secret}${r.oldKeyExpiresAt ? `\nThe old key keeps working until ${new Date(r.oldKeyExpiresAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })}.` : ''}`;
 
-export async function createCredential(airlineId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function createCredential(
+  airlineId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/airlines/${airlineId}`, async () =>
-    secretMessage(await api(`/v1/admin/airlines/${airlineId}/credentials`, { method: 'POST', body: { allowedIps: ipList(f) } })),
+    secretMessage(
+      await api(`/v1/admin/airlines/${airlineId}/credentials`, {
+        method: 'POST',
+        body: { allowedIps: ipList(f) },
+      }),
+    ),
   );
 }
 
 export async function rotateCredential(airlineId: string, credId: string): Promise<ActionState> {
-  return run(`/airlines/${airlineId}`, async () => secretMessage(await api(`/v1/admin/airlines/credentials/${credId}/rotate`, { method: 'POST' })));
+  return run(`/airlines/${airlineId}`, async () =>
+    secretMessage(await api(`/v1/admin/airlines/credentials/${credId}/rotate`, { method: 'POST' })),
+  );
 }
 
 export async function revokeCredential(airlineId: string, credId: string): Promise<ActionState> {
@@ -195,9 +265,17 @@ export async function revokeCredential(airlineId: string, credId: string): Promi
   });
 }
 
-export async function updateCredentialIps(airlineId: string, credId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function updateCredentialIps(
+  airlineId: string,
+  credId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/airlines/${airlineId}`, async () => {
-    await api(`/v1/admin/airlines/credentials/${credId}/ips`, { method: 'PUT', body: { allowedIps: ipList(f) } });
+    await api(`/v1/admin/airlines/credentials/${credId}/ips`, {
+      method: 'PUT',
+      body: { allowedIps: ipList(f) },
+    });
     return 'Allowed IPs saved.';
   });
 }
@@ -212,7 +290,10 @@ export async function saveConfig(key: string, _p: ActionState, f: FormData): Pro
     } catch {
       throw new ApiError(400, 'JSON', 'The value is not valid JSON.');
     }
-    const r = await api<{ version: number }>(`/v1/admin/config/${encodeURIComponent(key)}`, { method: 'PUT', body: { value } });
+    const r = await api<{ version: number }>(`/v1/admin/config/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: { value },
+    });
     return `Saved as version ${r.version}.`;
   });
 }

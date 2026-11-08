@@ -23,7 +23,13 @@ import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { randomToken, sha256 } from '../../common/crypto';
 import { PrismaService } from '../../common/prisma.service';
-import { AdminWrite, type AuthedRequest, Public, RateLimit, requireAdmin } from '../../common/auth/roles';
+import {
+  AdminWrite,
+  type AuthedRequest,
+  Public,
+  RateLimit,
+  requireAdmin,
+} from '../../common/auth/roles';
 import { ApiZodBody, ZodPipe } from '../../common/zod';
 import { AuditService } from '../audit/audit.service';
 import { BookingsService } from '../bookings/bookings.service';
@@ -52,9 +58,21 @@ export class OwnChannelService {
 
   private async usableQuote(quoteId: string): Promise<Quote> {
     const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
-    if (!quote || !OWN_CHANNELS.includes(quote.channel)) throw new NotFoundException({ code: 'QUOTE_UNKNOWN', message: 'That price was not found. Get a new price.' });
-    if (quote.expiresAt <= new Date()) throw new GoneException({ code: 'QUOTE_EXPIRED', message: 'This price is no longer held. Get a new price.' });
-    if (quote.lockedAt) throw new ConflictException({ code: 'QUOTE_USED', message: 'This price was already used for a booking.' });
+    if (!quote || !OWN_CHANNELS.includes(quote.channel))
+      throw new NotFoundException({
+        code: 'QUOTE_UNKNOWN',
+        message: 'That price was not found. Get a new price.',
+      });
+    if (quote.expiresAt <= new Date())
+      throw new GoneException({
+        code: 'QUOTE_EXPIRED',
+        message: 'This price is no longer held. Get a new price.',
+      });
+    if (quote.lockedAt)
+      throw new ConflictException({
+        code: 'QUOTE_USED',
+        message: 'This price was already used for a booking.',
+      });
     return quote;
   }
 
@@ -66,7 +84,9 @@ export class OwnChannelService {
   }) {
     const quote = await this.usableQuote(input.quoteId);
     const request = quote.request as unknown as StoredQuoteRequest;
-    const airline = quote.airlineId ? await this.prisma.airline.findUnique({ where: { id: quote.airlineId } }) : null;
+    const airline = quote.airlineId
+      ? await this.prisma.airline.findUnique({ where: { id: quote.airlineId } })
+      : null;
     const payload: PartnerBookingRequest = {
       quoteId: quote.id,
       airlineBookingReference: input.airlineBookingReference,
@@ -100,21 +120,34 @@ export class OwnChannelService {
   }
 
   async checkToken(bookingId: string, token: string | undefined) {
-    const b = await this.prisma.transferBooking.findUnique({ where: { id: bookingId }, select: { payTokenHash: true } });
+    const b = await this.prisma.transferBooking.findUnique({
+      where: { id: bookingId },
+      select: { payTokenHash: true },
+    });
     const given = Buffer.from(sha256(token ?? ''));
     if (!b?.payTokenHash || !token || !timingSafeEqual(given, Buffer.from(b.payTokenHash))) {
-      throw new ForbiddenException({ code: 'PAY_TOKEN_INVALID', message: 'This payment link is not valid.' });
+      throw new ForbiddenException({
+        code: 'PAY_TOKEN_INVALID',
+        message: 'This payment link is not valid.',
+      });
     }
   }
 
   pay(bookingId: string, payToken: string) {
-    return this.payments.initialize(bookingId, `${webUrl()}/booking/${bookingId}?t=${encodeURIComponent(payToken)}`);
+    return this.payments.initialize(
+      bookingId,
+      `${webUrl()}/booking/${bookingId}?t=${encodeURIComponent(payToken)}`,
+    );
   }
 
   async status(bookingId: string) {
     const b = await this.prisma.transferBooking.findUniqueOrThrow({
       where: { id: bookingId },
-      include: { legs: { orderBy: { type: 'asc' } }, quote: true, paymentIntents: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        legs: { orderBy: { type: 'asc' } },
+        quote: true,
+        paymentIntents: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
     });
     const bd = b.quoteSnapshot as StoredBreakdown | null;
     return {
@@ -124,7 +157,14 @@ export class OwnChannelService {
       totalKobo: b.amountKobo,
       priceHeldUntil: b.quote?.expiresAt.toISOString() ?? null,
       payment: b.paymentIntents[0] ? { status: b.paymentIntents[0].status } : null,
-      legs: b.legs.map((l, i) => ({ type: l.type, pickupAt: l.scheduledAt, pickup: l.pickupText, dropoff: l.dropoffText, amountKobo: l.amountKobo, lines: bd?.legs?.[i]?.lines ?? [] })),
+      legs: b.legs.map((l, i) => ({
+        type: l.type,
+        pickupAt: l.scheduledAt,
+        pickup: l.pickupText,
+        dropoff: l.dropoffText,
+        amountKobo: l.amountKobo,
+        lines: bd?.legs?.[i]?.lines ?? [],
+      })),
     };
   }
 }
@@ -146,10 +186,22 @@ export class OwnBookingsController {
   @RateLimit('bookings')
   @ApiZodBody(OwnBookingRequest)
   @ApiHeader({ name: 'idempotency-key', required: true })
-  create(@Body(new ZodPipe(OwnBookingRequest)) body: OwnBookingRequest, @Headers('idempotency-key') key?: string) {
-    if (!key || key.length < 8 || key.length > 100) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Send an Idempotency-Key header.' });
+  create(
+    @Body(new ZodPipe(OwnBookingRequest)) body: OwnBookingRequest,
+    @Headers('idempotency-key') key?: string,
+  ) {
+    if (!key || key.length < 8 || key.length > 100)
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'Send an Idempotency-Key header.',
+      });
     return this.idempotency.run('own-booking', key, body, () =>
-      this.own.create({ quoteId: body.quoteId, airlineBookingReference: body.airlineBookingReference, traveller: body.traveller, actor: { role: 'TRAVELLER' } }),
+      this.own.create({
+        quoteId: body.quoteId,
+        airlineBookingReference: body.airlineBookingReference,
+        traveller: body.traveller,
+        actor: { role: 'TRAVELLER' },
+      }),
     );
   }
 
@@ -158,7 +210,10 @@ export class OwnBookingsController {
   @Public()
   @RateLimit('payments')
   @ApiZodBody(PayBody)
-  async pay(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(PayBody)) body: z.infer<typeof PayBody>) {
+  async pay(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(PayBody)) body: z.infer<typeof PayBody>,
+  ) {
     await this.own.checkToken(id, body.payToken);
     return this.own.pay(id, body.payToken);
   }
@@ -185,11 +240,19 @@ export class OpsBookingsController {
   @Post()
   @AdminWrite()
   @ApiZodBody(OpsBookingRequest)
-  async create(@Req() req: AuthedRequest, @Body(new ZodPipe(OpsBookingRequest)) body: OpsBookingRequest) {
+  async create(
+    @Req() req: AuthedRequest,
+    @Body(new ZodPipe(OpsBookingRequest)) body: OpsBookingRequest,
+  ) {
     const admin = requireAdmin(req);
     const { airlineBookingReference, traveller, note, ...quoteReq } = body;
     const { quote } = await this.pricing.quoteOwn(quoteReq, 'OPS');
-    const created = await this.own.create({ quoteId: quote.id, airlineBookingReference, traveller, actor: { role: 'OPS', id: admin.userId } });
+    const created = await this.own.create({
+      quoteId: quote.id,
+      airlineBookingReference,
+      traveller,
+      actor: { role: 'OPS', id: admin.userId },
+    });
     const pay = await this.own.pay(created.bookingId, created.payToken);
     await this.audit.record({
       action: 'booking.ops_entry',

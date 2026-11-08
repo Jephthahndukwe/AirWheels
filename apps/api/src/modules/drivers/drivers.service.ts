@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, type DriverStatus, type PowerType, type VehicleClass } from '@prisma/client';
 import { KYC, type KycAdapter, SMS, type SmsAdapter } from '../../adapters/interfaces';
 import { numericCode } from '../../common/crypto';
@@ -45,7 +51,12 @@ export function onboardingChecklist(input: {
     kyc: input.kycPassed,
     vehicle: input.hasVehicle,
     training: { items: input.trainingItems, missing: missingTraining },
-    readyToInvite: input.hasDetails && missingDocs.length === 0 && input.kycPassed && input.hasVehicle && missingTraining.length === 0,
+    readyToInvite:
+      input.hasDetails &&
+      missingDocs.length === 0 &&
+      input.kycPassed &&
+      input.hasVehicle &&
+      missingTraining.length === 0,
   };
 }
 
@@ -90,7 +101,10 @@ export class DriversService {
             }
           : {}),
       },
-      include: { user: { select: { phone: true } }, vehicleAssignments: { where: { to: null }, include: { vehicle: true } } },
+      include: {
+        user: { select: { phone: true } },
+        vehicleAssignments: { where: { to: null }, include: { vehicle: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -115,9 +129,18 @@ export class DriversService {
         where: { driverId: id },
         orderBy: { createdAt: 'desc' },
         take: 10,
-        select: { id: true, phone: true, expiresAt: true, usedAt: true, revokedAt: true, createdAt: true },
+        select: {
+          id: true,
+          phone: true,
+          expiresAt: true,
+          usedAt: true,
+          revokedAt: true,
+          createdAt: true,
+        },
       }),
-      this.prisma.session.count({ where: { userId: d.userId, revokedAt: null, expiresAt: { gt: new Date() } } }),
+      this.prisma.session.count({
+        where: { userId: d.userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
       this.checklist(id),
     ]);
     const { pinHash: _p, ...safe } = d;
@@ -138,7 +161,14 @@ export class DriversService {
     const d = await this.load(id);
     const docs = await this.media.listFor('DRIVER', id);
     return onboardingChecklist({
-      hasDetails: !!(d.firstName && d.lastName && d.user.phone && d.licenceNumber && d.idType && d.idNumber),
+      hasDetails: !!(
+        d.firstName &&
+        d.lastName &&
+        d.user.phone &&
+        d.licenceNumber &&
+        d.idType &&
+        d.idNumber
+      ),
       uploadedTypes: docs.map((x) => x.type),
       requiredDocs: await this.config.get<string[]>(CONFIG.driverRequiredDocuments),
       kycPassed: !!d.kycVerifiedAt && (d.kycResult as { passed?: boolean } | null)?.passed === true,
@@ -160,7 +190,11 @@ export class DriversService {
     createdByAdminId: string;
   }) {
     const phone = normalisePhone(input.phone);
-    if (!phone) throw new BadRequestException({ code: 'PHONE_INVALID', message: 'Enter a valid mobile number.' });
+    if (!phone)
+      throw new BadRequestException({
+        code: 'PHONE_INVALID',
+        message: 'Enter a valid mobile number.',
+      });
     try {
       const d = await this.prisma.driverProfile.create({
         data: {
@@ -180,38 +214,81 @@ export class DriversService {
         action: 'driver.create',
         entity: 'DriverProfile',
         entityId: d.id,
-        after: { firstName: d.firstName, lastName: d.lastName, phone, licenceNumber: d.licenceNumber, idType: d.idType },
+        after: {
+          firstName: d.firstName,
+          lastName: d.lastName,
+          phone,
+          licenceNumber: d.licenceNumber,
+          idType: d.idType,
+        },
       });
       return d;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({ code: 'PHONE_TAKEN', message: 'Another account already uses this phone number.' });
+        throw new ConflictException({
+          code: 'PHONE_TAKEN',
+          message: 'Another account already uses this phone number.',
+        });
       }
       throw e;
     }
   }
 
-  async updateDetails(id: string, input: Partial<{ firstName: string; lastName: string; licenceNumber: string; idType: string; idNumber: string; address: string; referees: Referee[] }>) {
+  async updateDetails(
+    id: string,
+    input: Partial<{
+      firstName: string;
+      lastName: string;
+      licenceNumber: string;
+      idType: string;
+      idNumber: string;
+      address: string;
+      referees: Referee[];
+    }>,
+  ) {
     const before = await this.load(id);
     const after = await this.prisma.driverProfile.update({
       where: { id },
       data: { ...input, referees: input.referees as unknown as Prisma.InputJsonValue | undefined },
     });
-    const pick = (x: typeof after) => ({ firstName: x.firstName, lastName: x.lastName, licenceNumber: x.licenceNumber, idType: x.idType, idNumber: x.idNumber, address: x.address, referees: x.referees });
-    await this.audit.record({ action: 'driver.update', entity: 'DriverProfile', entityId: id, before: pick(before), after: pick(after) });
+    const pick = (x: typeof after) => ({
+      firstName: x.firstName,
+      lastName: x.lastName,
+      licenceNumber: x.licenceNumber,
+      idType: x.idType,
+      idNumber: x.idNumber,
+      address: x.address,
+      referees: x.referees,
+    });
+    await this.audit.record({
+      action: 'driver.update',
+      entity: 'DriverProfile',
+      entityId: id,
+      before: pick(before),
+      after: pick(after),
+    });
     return after;
   }
 
   async runKyc(id: string) {
     const d = await this.load(id);
-    if (!d.idType || !d.idNumber) throw new BadRequestException({ code: 'ID_MISSING', message: 'Add the ID type and number first.' });
+    if (!d.idType || !d.idNumber)
+      throw new BadRequestException({
+        code: 'ID_MISSING',
+        message: 'Add the ID type and number first.',
+      });
     const r = await this.kyc.verifyDriver({
       firstName: d.firstName,
       lastName: d.lastName,
       idType: d.idType as 'NIN' | 'DRIVERS_LICENSE',
       idNumber: d.idNumber,
     });
-    const result = { passed: r.passed, reference: r.reference, checkedAt: new Date().toISOString(), raw: r.raw };
+    const result = {
+      passed: r.passed,
+      reference: r.reference,
+      checkedAt: new Date().toISOString(),
+      raw: r.raw,
+    };
     await this.prisma.driverProfile.update({
       where: { id },
       data: {
@@ -233,52 +310,108 @@ export class DriversService {
   async setTraining(id: string, items: Record<string, boolean>) {
     const known = await this.config.get<string[]>(CONFIG.driverTrainingChecklist);
     const unknown = Object.keys(items).filter((k) => !known.includes(k));
-    if (unknown.length) throw new BadRequestException({ code: 'TRAINING_ITEM_UNKNOWN', message: `Unknown items: ${unknown.join(', ')}` });
+    if (unknown.length)
+      throw new BadRequestException({
+        code: 'TRAINING_ITEM_UNKNOWN',
+        message: `Unknown items: ${unknown.join(', ')}`,
+      });
     const before = await this.load(id);
-    const merged = { ...((before.trainingChecklist as Record<string, boolean> | null) ?? {}), ...items };
+    const merged = {
+      ...((before.trainingChecklist as Record<string, boolean> | null) ?? {}),
+      ...items,
+    };
     await this.prisma.driverProfile.update({ where: { id }, data: { trainingChecklist: merged } });
-    await this.audit.record({ action: 'driver.training', entity: 'DriverProfile', entityId: id, before: { training: before.trainingChecklist }, after: { training: merged } });
+    await this.audit.record({
+      action: 'driver.training',
+      entity: 'DriverProfile',
+      entityId: id,
+      before: { training: before.trainingChecklist },
+      after: { training: merged },
+    });
     return { training: merged };
   }
 
   async assignVehicle(id: string, vehicleId: string) {
     const d = await this.load(id);
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
-    if (!vehicle?.active) throw new NotFoundException({ code: 'VEHICLE_NOT_FOUND', message: 'No such active vehicle.' });
+    if (!vehicle?.active)
+      throw new NotFoundException({
+        code: 'VEHICLE_NOT_FOUND',
+        message: 'No such active vehicle.',
+      });
     const now = new Date();
     const previous = d.vehicleAssignments[0]?.vehicle.plate ?? null;
     await this.prisma.$transaction([
       // A driver has one vehicle at a time, and a vehicle one driver at a time.
-      this.prisma.vehicleAssignment.updateMany({ where: { driverId: id, to: null }, data: { to: now } }),
-      this.prisma.vehicleAssignment.updateMany({ where: { vehicleId, to: null }, data: { to: now } }),
+      this.prisma.vehicleAssignment.updateMany({
+        where: { driverId: id, to: null },
+        data: { to: now },
+      }),
+      this.prisma.vehicleAssignment.updateMany({
+        where: { vehicleId, to: null },
+        data: { to: now },
+      }),
       this.prisma.vehicleAssignment.create({ data: { driverId: id, vehicleId, from: now } }),
     ]);
-    await this.audit.record({ action: 'driver.vehicle_assign', entity: 'DriverProfile', entityId: id, before: { vehicle: previous }, after: { vehicle: vehicle.plate } });
+    await this.audit.record({
+      action: 'driver.vehicle_assign',
+      entity: 'DriverProfile',
+      entityId: id,
+      before: { vehicle: previous },
+      after: { vehicle: vehicle.plate },
+    });
     return { ok: true };
   }
 
-  async requestDocumentUpload(id: string, input: { type: string; fileName: string; contentType: string; expiresAt?: Date }, adminUserId: string) {
+  async requestDocumentUpload(
+    id: string,
+    input: { type: string; fileName: string; contentType: string; expiresAt?: Date },
+    adminUserId: string,
+  ) {
     await this.load(id);
-    return this.media.requestUpload({ ownerType: 'DRIVER', ownerId: id, ...input, uploadedById: adminUserId });
+    return this.media.requestUpload({
+      ownerType: 'DRIVER',
+      ownerId: id,
+      ...input,
+      uploadedById: adminUserId,
+    });
   }
 
   /** Sends (or resends) the invite: single-use code bound to the phone, configurable expiry (ACC-05). */
   async sendInvite(id: string, adminUserId: string) {
     const d = await this.load(id);
     if (!INVITABLE.includes(d.status)) {
-      throw new BadRequestException({ code: 'INVITE_NOT_ALLOWED', message: `A driver who is ${d.status.toLowerCase()} cannot be invited.` });
+      throw new BadRequestException({
+        code: 'INVITE_NOT_ALLOWED',
+        message: `A driver who is ${d.status.toLowerCase()} cannot be invited.`,
+      });
     }
     const checklist = await this.checklist(id);
     if (!checklist.readyToInvite) {
-      throw new BadRequestException({ code: 'ONBOARDING_INCOMPLETE', message: 'Finish documents, KYC, vehicle and training before inviting.', checklist });
+      throw new BadRequestException({
+        code: 'ONBOARDING_INCOMPLETE',
+        message: 'Finish documents, KYC, vehicle and training before inviting.',
+        checklist,
+      });
     }
     const phone = d.user.phone!;
     const code = numericCode(6);
     const hours = await this.config.get<number>(CONFIG.driverInviteExpiryHours);
     const expiresAt = new Date(Date.now() + hours * 3_600_000);
     await this.prisma.$transaction(async (tx) => {
-      await tx.driverInvite.updateMany({ where: { driverId: id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.driverInvite.create({ data: { driverId: id, phone, codeHash: await hashSecret(code), expiresAt, sentById: adminUserId } });
+      await tx.driverInvite.updateMany({
+        where: { driverId: id, usedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.driverInvite.create({
+        data: {
+          driverId: id,
+          phone,
+          codeHash: await hashSecret(code),
+          expiresAt,
+          sentById: adminUserId,
+        },
+      });
       // Resending after activation started sends the driver back to the start of activation.
       await tx.driverProfile.update({ where: { id }, data: { status: 'INVITED' } });
     });
@@ -287,14 +420,28 @@ export class DriversService {
       phone,
       `Airwheels: ${d.firstName}, you are invited to drive with us. Install the Airwheels Driver app, tap Activate (or open ${link}) and enter code ${code}. Expires in ${hours} hours.`,
     );
-    await this.audit.record({ action: 'driver.invite', entity: 'DriverProfile', entityId: id, before: { status: d.status }, after: { status: 'INVITED', expiresAt } });
+    await this.audit.record({
+      action: 'driver.invite',
+      entity: 'DriverProfile',
+      entityId: id,
+      before: { status: d.status },
+      after: { status: 'INVITED', expiresAt },
+    });
     return { expiresAt, ...(isDevelopment() ? { devCode: code } : {}) };
   }
 
   async revokeInvites(id: string) {
     const d = await this.load(id);
-    const r = await this.prisma.driverInvite.updateMany({ where: { driverId: id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
-    await this.audit.record({ action: 'driver.invite_revoke', entity: 'DriverProfile', entityId: id, after: { revoked: r.count, status: d.status } });
+    const r = await this.prisma.driverInvite.updateMany({
+      where: { driverId: id, usedAt: null, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await this.audit.record({
+      action: 'driver.invite_revoke',
+      entity: 'DriverProfile',
+      entityId: id,
+      after: { revoked: r.count, status: d.status },
+    });
     return { revoked: r.count };
   }
 
@@ -305,9 +452,17 @@ export class DriversService {
     await this.prisma.$transaction([
       this.prisma.driverProfile.update({
         where: { id },
-        data: { status: 'SUSPENDED', onDuty: false, suspendedAt: new Date(), suspendedReason: reason },
+        data: {
+          status: 'SUSPENDED',
+          onDuty: false,
+          suspendedAt: new Date(),
+          suspendedReason: reason,
+        },
       }),
-      this.prisma.driverInvite.updateMany({ where: { driverId: id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } }),
+      this.prisma.driverInvite.updateMany({
+        where: { driverId: id, usedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
     ]);
     const ended = await this.sessions.revokeAllForUser(d.userId, 'suspended', { driverId: id });
     await this.audit.record({
@@ -323,10 +478,23 @@ export class DriversService {
   /** Super admins only (PRD 2.2). Back to Active if the driver had finished activation. */
   async reactivate(id: string, reason: string) {
     const d = await this.load(id);
-    if (d.status !== 'SUSPENDED') throw new BadRequestException({ code: 'NOT_SUSPENDED', message: 'This driver is not suspended.' });
+    if (d.status !== 'SUSPENDED')
+      throw new BadRequestException({
+        code: 'NOT_SUSPENDED',
+        message: 'This driver is not suspended.',
+      });
     const status: DriverStatus = d.activatedAt && d.pinHash ? 'ACTIVE' : 'ONBOARDING';
-    await this.prisma.driverProfile.update({ where: { id }, data: { status, suspendedAt: null, suspendedReason: null } });
-    await this.audit.record({ action: 'driver.reactivate', entity: 'DriverProfile', entityId: id, before: { status: d.status, reason: d.suspendedReason }, after: { status, reason } });
+    await this.prisma.driverProfile.update({
+      where: { id },
+      data: { status, suspendedAt: null, suspendedReason: null },
+    });
+    await this.audit.record({
+      action: 'driver.reactivate',
+      entity: 'DriverProfile',
+      entityId: id,
+      before: { status: d.status, reason: d.suspendedReason },
+      after: { status, reason },
+    });
     return { status };
   }
 
@@ -335,7 +503,13 @@ export class DriversService {
   listVehicles() {
     return this.prisma.vehicle.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { partner: true, assignments: { where: { to: null }, include: { driver: { select: { id: true, firstName: true, lastName: true } } } } },
+      include: {
+        partner: true,
+        assignments: {
+          where: { to: null },
+          include: { driver: { select: { id: true, firstName: true, lastName: true } } },
+        },
+      },
     });
   }
 
@@ -355,12 +529,22 @@ export class DriversService {
     partnerId?: string;
   }) {
     try {
-      const v = await this.prisma.vehicle.create({ data: { ...input, plate: input.plate.toUpperCase().replace(/\s+/g, '-') } });
-      await this.audit.record({ action: 'vehicle.create', entity: 'Vehicle', entityId: v.id, after: v });
+      const v = await this.prisma.vehicle.create({
+        data: { ...input, plate: input.plate.toUpperCase().replace(/\s+/g, '-') },
+      });
+      await this.audit.record({
+        action: 'vehicle.create',
+        entity: 'Vehicle',
+        entityId: v.id,
+        after: v,
+      });
       return v;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({ code: 'PLATE_TAKEN', message: 'A vehicle with this plate exists.' });
+        throw new ConflictException({
+          code: 'PLATE_TAKEN',
+          message: 'A vehicle with this plate exists.',
+        });
       }
       throw e;
     }
@@ -378,16 +562,31 @@ export class DriversService {
       status: d.status,
       onDuty: d.onDuty,
       vehicle: d.vehicleAssignments[0]
-        ? { plate: d.vehicleAssignments[0].vehicle.plate, brand: d.vehicleAssignments[0].vehicle.brand, model: d.vehicleAssignments[0].vehicle.model, colour: d.vehicleAssignments[0].vehicle.colour }
+        ? {
+            plate: d.vehicleAssignments[0].vehicle.plate,
+            brand: d.vehicleAssignments[0].vehicle.brand,
+            model: d.vehicleAssignments[0].vehicle.model,
+            colour: d.vehicleAssignments[0].vehicle.colour,
+          }
         : null,
     };
   }
 
   async setDuty(driverId: string, onDuty: boolean) {
     const d = await this.load(driverId);
-    if (d.status !== 'ACTIVE') throw new BadRequestException({ code: 'NOT_ACTIVE', message: 'Only active drivers can go on duty.' });
+    if (d.status !== 'ACTIVE')
+      throw new BadRequestException({
+        code: 'NOT_ACTIVE',
+        message: 'Only active drivers can go on duty.',
+      });
     await this.prisma.driverProfile.update({ where: { id: driverId }, data: { onDuty } });
-    await this.audit.record({ action: onDuty ? 'driver.on_duty' : 'driver.off_duty', entity: 'DriverProfile', entityId: driverId, before: { onDuty: d.onDuty }, after: { onDuty } });
+    await this.audit.record({
+      action: onDuty ? 'driver.on_duty' : 'driver.off_duty',
+      entity: 'DriverProfile',
+      entityId: driverId,
+      before: { onDuty: d.onDuty },
+      after: { onDuty },
+    });
     return { onDuty };
   }
 }

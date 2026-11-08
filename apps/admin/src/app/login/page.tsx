@@ -4,7 +4,11 @@ import { LoginForm } from './login-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Login({ searchParams }: { searchParams: Promise<{ expired?: string }> }) {
+export default async function Login({
+  searchParams,
+}: {
+  searchParams: Promise<{ expired?: string }>;
+}) {
   if (await getMe()) redirect('/');
   const { expired } = await searchParams;
   return (
@@ -13,7 +17,9 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
         <span className="text-coral">Air</span>wheels
       </p>
       <p className="mb-6 text-sm text-slate">Staff sign-in</p>
-      {expired && <p className="mb-4 rounded bg-cloud p-2 text-sm">Your session ended. Sign in again.</p>}
+      {expired && (
+        <p className="mb-4 rounded bg-cloud p-2 text-sm">Your session ended. Sign in again.</p>
+      )}
       <LoginForm />
     </div>
   );

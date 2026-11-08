@@ -19,7 +19,10 @@ export default async function Airlines() {
   return (
     <div className="max-w-5xl">
       <h1 className="mb-6 text-2xl font-bold">Airlines</h1>
-      <Table head={['Airline', 'Code', 'Service name', 'Status', 'Active API keys']} empty={rows.length === 0 && 'No airlines yet.'}>
+      <Table
+        head={['Airline', 'Code', 'Service name', 'Status', 'Active API keys']}
+        empty={rows.length === 0 && 'No airlines yet.'}
+      >
         {rows.map((a) => (
           <tr key={a.id}>
             <Td>
@@ -36,7 +39,10 @@ export default async function Airlines() {
           </tr>
         ))}
       </Table>
-      <p className="mt-4 text-sm text-slate">Branding, message templates, revenue share and settlement settings arrive with the airline integration (M5).</p>
+      <p className="mt-4 text-sm text-slate">
+        Branding, message templates, revenue share and settlement settings arrive with the airline
+        integration (M5).
+      </p>
     </div>
   );
 }

@@ -13,8 +13,18 @@ export const ui = StyleSheet.create({
   screen: { flex: 1, backgroundColor: brand.cloud, padding: space[5] },
   h1: { fontFamily: font.bold, fontSize: 26, color: brand.ink, marginBottom: space[2] },
   body: { fontFamily: font.regular, fontSize: 15, color: brand.slate },
-  card: { backgroundColor: brand.white, borderRadius: radius.lg, padding: space[4], marginTop: space[4] },
-  button: { backgroundColor: brand.coral, borderRadius: radius.md, paddingVertical: 16, alignItems: 'center' },
+  card: {
+    backgroundColor: brand.white,
+    borderRadius: radius.lg,
+    padding: space[4],
+    marginTop: space[4],
+  },
+  button: {
+    backgroundColor: brand.coral,
+    borderRadius: radius.md,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
   buttonText: { fontFamily: font.semibold, fontSize: 16, color: brand.white },
   input: {
     backgroundColor: brand.white,

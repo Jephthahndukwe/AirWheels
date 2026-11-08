@@ -10,7 +10,8 @@ const s = (f: FormData, k: string) => String(f.get(k) ?? '').trim();
 /** Naira typed by ops (e.g. "5,000" or "5000.50") to integer kobo. Never floats in storage. */
 function nairaToKobo(input: string): number {
   const clean = input.replace(/[,\s₦]/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(clean)) throw new ApiError(400, 'AMOUNT_INVALID', 'Enter an amount in naira, like 5000 or 5000.50.');
+  if (!/^\d+(\.\d{1,2})?$/.test(clean))
+    throw new ApiError(400, 'AMOUNT_INVALID', 'Enter an amount in naira, like 5000 or 5000.50.');
   const [whole, frac = ''] = clean.split('.');
   return Number(whole) * 100 + Number(frac.padEnd(2, '0'));
 }
@@ -25,19 +26,37 @@ async function run(path: string, fn: () => Promise<string | void>): Promise<Acti
   }
 }
 
-export async function refundBooking(bookingId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function refundBooking(
+  bookingId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/bookings/${bookingId}`, async () => {
-    const r = await api<{ amountKobo: number; route: string; status: string }>(`/v1/admin/bookings/${bookingId}/refunds`, {
-      method: 'POST',
-      body: { amountKobo: nairaToKobo(s(f, 'amount')), reason: s(f, 'reason'), legId: s(f, 'legId') || undefined },
-    });
+    const r = await api<{ amountKobo: number; route: string; status: string }>(
+      `/v1/admin/bookings/${bookingId}/refunds`,
+      {
+        method: 'POST',
+        body: {
+          amountKobo: nairaToKobo(s(f, 'amount')),
+          reason: s(f, 'reason'),
+          legId: s(f, 'legId') || undefined,
+        },
+      },
+    );
     return `Refund of ₦${(r.amountKobo / 100).toLocaleString('en-NG')} ${r.route === 'PAYSTACK' ? 'sent through Paystack' : 'added to the airline statement'} (${r.status.toLowerCase()}).`;
   });
 }
 
-export async function cancelBooking(bookingId: string, _p: ActionState, f: FormData): Promise<ActionState> {
+export async function cancelBooking(
+  bookingId: string,
+  _p: ActionState,
+  f: FormData,
+): Promise<ActionState> {
   return run(`/bookings/${bookingId}`, async () => {
-    await api(`/v1/admin/bookings/${bookingId}/cancel`, { method: 'POST', body: { reason: s(f, 'reason') } });
+    await api(`/v1/admin/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      body: { reason: s(f, 'reason') },
+    });
     return 'Booking cancelled. Refund separately if money is owed.';
   });
 }
@@ -59,12 +78,24 @@ export async function createOpsBooking(_p: ActionState, f: FormData): Promise<Ac
         type: t,
         flightNumber: s(f, `${t}.flight`),
         date: s(f, `${t}.date`),
-        address: { text: s(f, `${t}.address`), location: { lat: Number(s(f, `${t}.lat`)), lng: Number(s(f, `${t}.lng`)) }, landmark: s(f, `${t}.landmark`) || undefined },
+        address: {
+          text: s(f, `${t}.address`),
+          location: { lat: Number(s(f, `${t}.lat`)), lng: Number(s(f, `${t}.lng`)) },
+          landmark: s(f, `${t}.landmark`) || undefined,
+        },
       }));
     if (!legs.length) throw new ApiError(400, 'NO_LEGS', 'Fill in at least one leg.');
     for (const l of legs) {
-      if (!Number.isFinite(l.address.location.lat) || !Number.isFinite(l.address.location.lng) || !l.address.text) {
-        throw new ApiError(400, 'ADDRESS', 'Choose an address from the search results for each leg.');
+      if (
+        !Number.isFinite(l.address.location.lat) ||
+        !Number.isFinite(l.address.location.lng) ||
+        !l.address.text
+      ) {
+        throw new ApiError(
+          400,
+          'ADDRESS',
+          'Choose an address from the search results for each leg.',
+        );
       }
     }
     const phone = s(f, 'phone').replace(/\s/g, '');
@@ -78,7 +109,12 @@ export async function createOpsBooking(_p: ActionState, f: FormData): Promise<Ac
         plan: s(f, 'plan') || 'STANDARD',
         extras: { childSeats: Number(s(f, 'childSeats') || 0), extraStops: 0 },
         airlineBookingReference: s(f, 'reference'),
-        traveller: { name: s(f, 'name'), phone: phone.startsWith('0') ? `+234${phone.slice(1)}` : phone, whatsapp: f.get('whatsapp') === 'on', email: s(f, 'email') || undefined },
+        traveller: {
+          name: s(f, 'name'),
+          phone: phone.startsWith('0') ? `+234${phone.slice(1)}` : phone,
+          whatsapp: f.get('whatsapp') === 'on',
+          email: s(f, 'email') || undefined,
+        },
         note: s(f, 'note') || undefined,
       },
     });
@@ -101,7 +137,13 @@ export async function addPricingRule(_p: ActionState, f: FormData): Promise<Acti
     const to = s(f, 'effectiveTo');
     const r = await api<{ version: number; type: string; key: string }>('/v1/admin/pricing/rules', {
       method: 'POST',
-      body: { type: s(f, 'type'), key: s(f, 'key'), values, effectiveFrom: from ? new Date(`${from}:00+01:00`).toISOString() : undefined, effectiveTo: to ? new Date(`${to}:00+01:00`).toISOString() : undefined },
+      body: {
+        type: s(f, 'type'),
+        key: s(f, 'key'),
+        values,
+        effectiveFrom: from ? new Date(`${from}:00+01:00`).toISOString() : undefined,
+        effectiveTo: to ? new Date(`${to}:00+01:00`).toISOString() : undefined,
+      },
     });
     return `${r.type} ${r.key} version ${r.version} saved.`;
   });
@@ -116,7 +158,10 @@ export async function endPricingRule(id: string): Promise<ActionState> {
 
 export async function reconcileNow(_p: ActionState, f: FormData): Promise<ActionState> {
   return run('/payments', async () => {
-    const r = await api<{ day: string; checked: number; settled: number; mismatches: unknown[] }>('/v1/admin/payments/reconcile', { method: 'POST', body: { day: s(f, 'day') || undefined } });
+    const r = await api<{ day: string; checked: number; settled: number; mismatches: unknown[] }>(
+      '/v1/admin/payments/reconcile',
+      { method: 'POST', body: { day: s(f, 'day') || undefined } },
+    );
     return `Reconciled ${r.day}: ${r.checked} checked, ${r.settled} settled, ${r.mismatches.length} mismatch${r.mismatches.length === 1 ? '' : 'es'}.`;
   });
 }
@@ -124,5 +169,7 @@ export async function reconcileNow(_p: ActionState, f: FormData): Promise<Action
 /** Places search for the ops booking form (server-side, so the form stays simple). */
 export async function searchPlaces(q: string) {
   if (q.trim().length < 2) return [];
-  return api<{ placeId: string; description: string; location: { lat: number; lng: number } }[]>(`/v1/places/search?q=${encodeURIComponent(q)}`);
+  return api<{ placeId: string; description: string; location: { lat: number; lng: number } }[]>(
+    `/v1/places/search?q=${encodeURIComponent(q)}`,
+  );
 }

@@ -9,8 +9,13 @@ import { sha256 } from '../../common/crypto';
 export function pickupCodeFor(legId: string, version: number): string {
   // Its own key, so rotating APP_ENCRYPTION_KEY never changes codes travellers already have.
   const key = process.env.PICKUP_CODE_KEY;
-  if (!key) throw new Error('PICKUP_CODE_KEY is not set. Run `pnpm setup:env` locally, or set it in the secrets manager.');
-  const n = createHmac('sha256', key).update(`pickup:${legId}:v${version}`).digest().readUInt32BE(0) % 10_000;
+  if (!key)
+    throw new Error(
+      'PICKUP_CODE_KEY is not set. Run `pnpm setup:env` locally, or set it in the secrets manager.',
+    );
+  const n =
+    createHmac('sha256', key).update(`pickup:${legId}:v${version}`).digest().readUInt32BE(0) %
+    10_000;
   return String(n).padStart(4, '0');
 }
 
@@ -18,9 +23,7 @@ export const pickupCodeHash = (legId: string, version: number, code: string) =>
   sha256(`${legId}:v${version}:${code}`);
 
 export type PickupCodeCheck =
-  | { result: 'OK' }
-  | { result: 'WRONG'; attemptsLeft: number }
-  | { result: 'LOCKED' };
+  { result: 'OK' } | { result: 'WRONG'; attemptsLeft: number } | { result: 'LOCKED' };
 
 /**
  * Pure attempt check. `failedAttempts` is the count before this guess. After `maxAttempts`
@@ -35,7 +38,8 @@ export function checkPickupCode(input: {
   maxAttempts: number;
 }): PickupCodeCheck {
   if (input.failedAttempts >= input.maxAttempts) return { result: 'LOCKED' };
-  if (pickupCodeHash(input.legId, input.version, input.guess) === input.storedHash) return { result: 'OK' };
+  if (pickupCodeHash(input.legId, input.version, input.guess) === input.storedHash)
+    return { result: 'OK' };
   const left = input.maxAttempts - input.failedAttempts - 1;
   return left <= 0 ? { result: 'LOCKED' } : { result: 'WRONG', attemptsLeft: left };
 }

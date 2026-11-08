@@ -19,11 +19,17 @@ if (!('reference' in created)) process.exit(1);
 const ref = created.reference;
 const fetched = await getBooking(ref);
 const b = fetched.body as { status: string; legs: unknown[]; airlineBookingReference: string };
-assert(fetched.status === 200 && b.airlineBookingReference === ref, 'booking is stored and readable');
+assert(
+  fetched.status === 200 && b.airlineBookingReference === ref,
+  'booking is stored and readable',
+);
 assert(b.legs.length === 1 && b.status === 'CONFIRMED', 'booking has one confirmed leg');
 
 const replay = await sendBooking(ref);
-assert(replay.status === 409 || replay.status === 201, 'duplicate reference does not create a second booking');
+assert(
+  replay.status === 409 || replay.status === 201,
+  'duplicate reference does not create a second booking',
+);
 
 const alert = await flightAlert('TIME_SHIFTED');
 assert(alert.status === 202, 'flight alert accepted');

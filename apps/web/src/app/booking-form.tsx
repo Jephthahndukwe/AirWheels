@@ -29,9 +29,15 @@ export function toE164(raw: string): string | null {
 }
 
 /** Vehicle suggested from passengers and bags (CHN-09). The API has the final say. */
-const suggest = (pax: number, bags: number): VehicleClass => (pax <= 3 && bags <= 3 ? 'SEDAN' : pax <= 4 && bags <= 5 ? 'SUV' : 'VAN');
+const suggest = (pax: number, bags: number): VehicleClass =>
+  pax <= 3 && bags <= 3 ? 'SEDAN' : pax <= 4 && bags <= 5 ? 'SUV' : 'VAN';
 
-function Segmented<T extends string>(props: { value: T; options: [T, string, string?][]; onChange: (v: T) => void; label: string }) {
+function Segmented<T extends string>(props: {
+  value: T;
+  options: [T, string, string?][];
+  onChange: (v: T) => void;
+  label: string;
+}) {
   return (
     <div className="grid grid-flow-col gap-2" role="radiogroup" aria-label={props.label}>
       {props.options.map(([v, label, hint]) => (
@@ -43,7 +49,9 @@ function Segmented<T extends string>(props: { value: T; options: [T, string, str
           onClick={() => props.onChange(v)}
           className={cn(
             'rounded-md border px-2 py-2 text-sm font-medium',
-            props.value === v ? 'border-primary bg-primary/10 text-ink' : 'border-border bg-background',
+            props.value === v
+              ? 'border-primary bg-primary/10 text-ink'
+              : 'border-border bg-background',
           )}
         >
           {label}
@@ -54,16 +62,48 @@ function Segmented<T extends string>(props: { value: T; options: [T, string, str
   );
 }
 
-function Stepper({ id, label, value, min, max, onChange }: { id: string; label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+function Stepper({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (n: number) => void;
+}) {
   return (
     <div>
       <Label htmlFor={id}>{label}</Label>
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" aria-label={`Fewer ${label.toLowerCase()}`} onClick={() => onChange(Math.max(min, value - 1))}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={`Fewer ${label.toLowerCase()}`}
+          onClick={() => onChange(Math.max(min, value - 1))}
+        >
           −
         </Button>
-        <Input id={id} inputMode="numeric" className="w-14 text-center" value={value} onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))} />
-        <Button type="button" variant="outline" size="sm" aria-label={`More ${label.toLowerCase()}`} onClick={() => onChange(Math.min(max, value + 1))}>
+        <Input
+          id={id}
+          inputMode="numeric"
+          className="w-14 text-center"
+          value={value}
+          onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={`More ${label.toLowerCase()}`}
+          onClick={() => onChange(Math.min(max, value + 1))}
+        >
           +
         </Button>
       </div>
@@ -77,13 +117,22 @@ export function BookingForm() {
   const params = useSearchParams();
   // Post-booking link from the airline's email (CHN-04): ?airline=P4&ref=ABC123&flight=P47121&date=2026-11-20&leg=DEPARTURE
   const airlineCode = params.get('airline') ?? undefined;
-  const linkLeg = params.get('leg') === 'ARRIVAL' ? 'ARRIVAL' : params.get('leg') === 'BOTH' ? 'BOTH' : 'DEPARTURE';
+  const linkLeg =
+    params.get('leg') === 'ARRIVAL'
+      ? 'ARRIVAL'
+      : params.get('leg') === 'BOTH'
+        ? 'BOTH'
+        : 'DEPARTURE';
 
   const [transfer, setTransfer] = useState<Transfer>(params.get('flight') ? linkLeg : 'DEPARTURE');
   const [reference, setReference] = useState(params.get('ref') ?? '');
-  const [depFlight, setDepFlight] = useState(params.get('flight') && linkLeg !== 'ARRIVAL' ? params.get('flight')! : '');
+  const [depFlight, setDepFlight] = useState(
+    params.get('flight') && linkLeg !== 'ARRIVAL' ? params.get('flight')! : '',
+  );
   const [depDate, setDepDate] = useState(params.get('date') ?? tomorrow());
-  const [arrFlight, setArrFlight] = useState(params.get('flight') && linkLeg === 'ARRIVAL' ? params.get('flight')! : '');
+  const [arrFlight, setArrFlight] = useState(
+    params.get('flight') && linkLeg === 'ARRIVAL' ? params.get('flight')! : '',
+  );
   const [arrDate, setArrDate] = useState(params.get('date') ?? tomorrow());
   const [home, setHome] = useState<PickedAddress | null>(null);
   const [destination, setDestination] = useState<PickedAddress | null>(null);
@@ -106,46 +155,106 @@ export function BookingForm() {
   const [bookingKey] = useState(newKey);
 
   const suggested = suggest(passengers, bags);
-  const sharedBlocked = passengers > 2 ? 'Shared is for 1 or 2 people' : bags > passengers * 2 ? 'Up to 2 bags each on shared' : null;
+  const sharedBlocked =
+    passengers > 2
+      ? 'Shared is for 1 or 2 people'
+      : bags > passengers * 2
+        ? 'Up to 2 bags each on shared'
+        : null;
   useEffect(() => {
     if (sharedBlocked && rideType === 'SHARED') setRideType('PRIVATE');
   }, [sharedBlocked, rideType]);
 
   // Any change to the trip means the shown price no longer applies.
-  const tripKey = JSON.stringify([transfer, depFlight, depDate, arrFlight, arrDate, home, destination, sameAddress, passengers, bags, rideType, vehicle, plan, childSeats, promo]);
+  const tripKey = JSON.stringify([
+    transfer,
+    depFlight,
+    depDate,
+    arrFlight,
+    arrDate,
+    home,
+    destination,
+    sameAddress,
+    passengers,
+    bags,
+    rideType,
+    vehicle,
+    plan,
+    childSeats,
+    promo,
+  ]);
   useEffect(() => setQuote(null), [tripKey]);
   useEffect(() => {
     if (!quote) return;
     const t = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(t);
   }, [quote]);
-  const minutesLeft = quote ? Math.max(0, Math.floor((Date.parse(quote.expiresAt) - now) / 60_000)) : 0;
+  const minutesLeft = quote
+    ? Math.max(0, Math.floor((Date.parse(quote.expiresAt) - now) / 60_000))
+    : 0;
   const expired = !!quote && Date.parse(quote.expiresAt) <= now;
 
   const legs = useMemo(() => {
-    const out: { type: 'DEPARTURE' | 'ARRIVAL'; flightNumber: string; date: string; address: PickedAddress | null }[] = [];
-    if (transfer !== 'ARRIVAL') out.push({ type: 'DEPARTURE', flightNumber: depFlight, date: depDate, address: home });
-    if (transfer !== 'DEPARTURE') out.push({ type: 'ARRIVAL', flightNumber: arrFlight, date: arrDate, address: transfer === 'BOTH' && sameAddress ? home : destination });
+    const out: {
+      type: 'DEPARTURE' | 'ARRIVAL';
+      flightNumber: string;
+      date: string;
+      address: PickedAddress | null;
+    }[] = [];
+    if (transfer !== 'ARRIVAL')
+      out.push({ type: 'DEPARTURE', flightNumber: depFlight, date: depDate, address: home });
+    if (transfer !== 'DEPARTURE')
+      out.push({
+        type: 'ARRIVAL',
+        flightNumber: arrFlight,
+        date: arrDate,
+        address: transfer === 'BOTH' && sameAddress ? home : destination,
+      });
     return out;
   }, [transfer, depFlight, depDate, arrFlight, arrDate, home, destination, sameAddress]);
 
-  async function api<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
-    const data = (await res.json().catch(() => ({}))) as { message?: string | string[]; issues?: { message: string }[] } & T;
-    if (!res.ok) throw new Error(data.issues?.[0]?.message ?? (Array.isArray(data.message) ? data.message.join(', ') : data.message) ?? 'Something went wrong. Try again.');
+  async function api<T>(
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      message?: string | string[];
+      issues?: { message: string }[];
+    } & T;
+    if (!res.ok)
+      throw new Error(
+        data.issues?.[0]?.message ??
+          (Array.isArray(data.message) ? data.message.join(', ') : data.message) ??
+          'Something went wrong. Try again.',
+      );
     return data;
   }
 
   async function getQuote() {
     setError(null);
-    const missing = legs.find((l) => !l.flightNumber.trim()) ? 'Enter your flight number.' : legs.find((l) => !l.address) ? 'Choose the address from the list, or drop a pin.' : null;
+    const missing = legs.find((l) => !l.flightNumber.trim())
+      ? 'Enter your flight number.'
+      : legs.find((l) => !l.address)
+        ? 'Choose the address from the list, or drop a pin.'
+        : null;
     if (missing) return setError(missing);
     setBusy('quote');
     try {
       setQuote(
         await api<QuoteResponse>('/v1/quotes', {
           airlineCode,
-          legs: legs.map((l) => ({ type: l.type, flightNumber: l.flightNumber, date: l.date, address: l.address })),
+          legs: legs.map((l) => ({
+            type: l.type,
+            flightNumber: l.flightNumber,
+            date: l.date,
+            address: l.address,
+          })),
           passengers,
           bags,
           rideType,
@@ -168,7 +277,8 @@ export function BookingForm() {
     const e164 = toE164(phone);
     if (name.trim().length < 2) return setError('Enter your name as it is on the airline booking.');
     if (!e164) return setError('Enter a mobile number, e.g. 0801 234 5678.');
-    if (!/^[A-Za-z0-9]{5,12}$/.test(reference.trim())) return setError('Enter your airline booking reference (5 to 12 letters and numbers).');
+    if (!/^[A-Za-z0-9]{5,12}$/.test(reference.trim()))
+      return setError('Enter your airline booking reference (5 to 12 letters and numbers).');
     setBusy('pay');
     try {
       const booking = await api<{ bookingId: string; payToken: string; trackingUrl: string }>(
@@ -182,19 +292,35 @@ export function BookingForm() {
         { 'idempotency-key': `${bookingKey}-${quote.quoteId}` },
       );
       try {
-        sessionStorage.setItem(`aw:booking:${booking.bookingId}`, JSON.stringify({ trackingUrl: booking.trackingUrl }));
+        sessionStorage.setItem(
+          `aw:booking:${booking.bookingId}`,
+          JSON.stringify({ trackingUrl: booking.trackingUrl }),
+        );
       } catch {
         /* private mode: the status page still works from the link */
       }
-      const pay = await api<{ status: string; authorizationUrl?: string }>(`/v1/bookings/${booking.bookingId}/pay`, { payToken: booking.payToken });
-      window.location.href = pay.authorizationUrl ?? `/booking/${booking.bookingId}?t=${encodeURIComponent(booking.payToken)}`;
+      const pay = await api<{ status: string; authorizationUrl?: string }>(
+        `/v1/bookings/${booking.bookingId}/pay`,
+        { payToken: booking.payToken },
+      );
+      window.location.href =
+        pay.authorizationUrl ??
+        `/booking/${booking.bookingId}?t=${encodeURIComponent(booking.payToken)}`;
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);
     }
   }
 
-  const time = (iso: string) => new Intl.DateTimeFormat('en-NG', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  const time = (iso: string) =>
+    new Intl.DateTimeFormat('en-NG', {
+      timeZone: 'Africa/Lagos',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(iso));
 
   return (
     <Card className="space-y-5">
@@ -202,12 +328,27 @@ export function BookingForm() {
 
       <div>
         <Label>Transfer</Label>
-        <Segmented label="Transfer" value={transfer} onChange={setTransfer} options={[['DEPARTURE', 'To airport'], ['ARRIVAL', 'From airport'], ['BOTH', 'Both']]} />
+        <Segmented
+          label="Transfer"
+          value={transfer}
+          onChange={setTransfer}
+          options={[
+            ['DEPARTURE', 'To airport'],
+            ['ARRIVAL', 'From airport'],
+            ['BOTH', 'Both'],
+          ]}
+        />
       </div>
 
       <div>
         <Label htmlFor="ref">Airline booking reference</Label>
-        <Input id="ref" autoCapitalize="characters" placeholder="e.g. ABC123" value={reference} onChange={(e) => setReference(e.target.value.toUpperCase())} />
+        <Input
+          id="ref"
+          autoCapitalize="characters"
+          placeholder="e.g. ABC123"
+          value={reference}
+          onChange={(e) => setReference(e.target.value.toUpperCase())}
+        />
       </div>
 
       {transfer !== 'ARRIVAL' && (
@@ -216,11 +357,23 @@ export function BookingForm() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="dep-flight">Flight number</Label>
-              <Input id="dep-flight" autoCapitalize="characters" placeholder="P47121" value={depFlight} onChange={(e) => setDepFlight(e.target.value.toUpperCase())} />
+              <Input
+                id="dep-flight"
+                autoCapitalize="characters"
+                placeholder="P47121"
+                value={depFlight}
+                onChange={(e) => setDepFlight(e.target.value.toUpperCase())}
+              />
             </div>
             <div>
               <Label htmlFor="dep-date">Flight date</Label>
-              <Input id="dep-date" type="date" value={depDate} min={tomorrow()} onChange={(e) => setDepDate(e.target.value)} />
+              <Input
+                id="dep-date"
+                type="date"
+                value={depDate}
+                min={tomorrow()}
+                onChange={(e) => setDepDate(e.target.value)}
+              />
             </div>
           </div>
           <AddressPicker id="home" label="Pickup address" value={home} onChange={setHome} />
@@ -233,42 +386,95 @@ export function BookingForm() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="arr-flight">Flight number</Label>
-              <Input id="arr-flight" autoCapitalize="characters" placeholder="P47122" value={arrFlight} onChange={(e) => setArrFlight(e.target.value.toUpperCase())} />
+              <Input
+                id="arr-flight"
+                autoCapitalize="characters"
+                placeholder="P47122"
+                value={arrFlight}
+                onChange={(e) => setArrFlight(e.target.value.toUpperCase())}
+              />
             </div>
             <div>
               <Label htmlFor="arr-date">Landing date</Label>
-              <Input id="arr-date" type="date" value={arrDate} min={tomorrow()} onChange={(e) => setArrDate(e.target.value)} />
+              <Input
+                id="arr-date"
+                type="date"
+                value={arrDate}
+                min={tomorrow()}
+                onChange={(e) => setArrDate(e.target.value)}
+              />
             </div>
           </div>
           {transfer === 'BOTH' && (
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={sameAddress} onChange={(e) => setSameAddress(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={sameAddress}
+                onChange={(e) => setSameAddress(e.target.checked)}
+              />
               Drop me at the same address
             </label>
           )}
-          {(transfer === 'ARRIVAL' || !sameAddress) && <AddressPicker id="destination" label="Destination address" value={destination} onChange={setDestination} />}
+          {(transfer === 'ARRIVAL' || !sameAddress) && (
+            <AddressPicker
+              id="destination"
+              label="Destination address"
+              value={destination}
+              onChange={setDestination}
+            />
+          )}
         </fieldset>
       )}
 
       <div>
         <Label htmlFor="name">Name on the airline booking</Label>
-        <Input id="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input
+          id="name"
+          autoComplete="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
       <div>
         <Label htmlFor="phone">Mobile number</Label>
-        <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0801 234 5678" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <Input
+          id="phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="0801 234 5678"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
         <label className="mt-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={whatsapp} onChange={(e) => setWhatsapp(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.checked)}
+          />
           This is my WhatsApp number
         </label>
       </div>
       <div>
         <Label htmlFor="email">Email for the receipt (optional)</Label>
-        <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input
+          id="email"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Stepper id="pax" label="Passengers" value={passengers} min={1} max={7} onChange={setPassengers} />
+        <Stepper
+          id="pax"
+          label="Passengers"
+          value={passengers}
+          min={1}
+          max={7}
+          onChange={setPassengers}
+        />
         <Stepper id="bags" label="Bags" value={bags} min={0} max={12} onChange={setBags} />
       </div>
 
@@ -277,14 +483,21 @@ export function BookingForm() {
         <Segmented
           label="Ride type"
           value={rideType}
-          onChange={(v) => (v === 'SHARED' && sharedBlocked ? setError(`${sharedBlocked}. Choose Private.`) : setRideType(v))}
+          onChange={(v) =>
+            v === 'SHARED' && sharedBlocked
+              ? setError(`${sharedBlocked}. Choose Private.`)
+              : setRideType(v)
+          }
           options={[
             ['PRIVATE', 'Private car', 'The car is yours'],
             ['SHARED', 'Shared', sharedBlocked ?? 'Up to 3 travellers, lower fare'],
           ]}
         />
         {rideType === 'SHARED' && (
-          <p className="mt-2 text-xs text-muted-foreground">We match you with up to 2 travellers going your way, adding no more than 20 minutes. No match means a private car at the shared price.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            We match you with up to 2 travellers going your way, adding no more than 20 minutes. No
+            match means a private car at the shared price.
+          </p>
         )}
       </div>
 
@@ -319,10 +532,22 @@ export function BookingForm() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Stepper id="seats" label="Child seats" value={childSeats} min={0} max={3} onChange={setChildSeats} />
+        <Stepper
+          id="seats"
+          label="Child seats"
+          value={childSeats}
+          min={0}
+          max={3}
+          onChange={setChildSeats}
+        />
         <div>
           <Label htmlFor="promo">Promo code</Label>
-          <Input id="promo" autoCapitalize="characters" value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} />
+          <Input
+            id="promo"
+            autoCapitalize="characters"
+            value={promo}
+            onChange={(e) => setPromo(e.target.value.toUpperCase())}
+          />
         </div>
       </div>
 
@@ -337,14 +562,23 @@ export function BookingForm() {
           {quote.legs.map((l) => (
             <div key={l.type}>
               <p className="text-sm font-semibold">
-                {l.type === 'DEPARTURE' ? 'To the airport' : 'From the airport'} · flight {l.flight.number}
+                {l.type === 'DEPARTURE' ? 'To the airport' : 'From the airport'} · flight{' '}
+                {l.flight.number}
               </p>
-              <p className="text-xs text-muted-foreground">{l.type === 'DEPARTURE' ? `Pickup about ${time(l.pickupAt)}` : `Driver waiting from ${time(l.pickupAt)}`}</p>
+              <p className="text-xs text-muted-foreground">
+                {l.type === 'DEPARTURE'
+                  ? `Pickup about ${time(l.pickupAt)}`
+                  : `Driver waiting from ${time(l.pickupAt)}`}
+              </p>
               <dl className="mt-1 space-y-0.5 text-sm">
                 {l.lines.map((x) => (
                   <div key={x.code} className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">{x.label}</dt>
-                    <dd className="tabular-nums">{x.amountKobo < 0 ? `−${formatNaira(-x.amountKobo)}` : formatNaira(x.amountKobo)}</dd>
+                    <dd className="tabular-nums">
+                      {x.amountKobo < 0
+                        ? `−${formatNaira(-x.amountKobo)}`
+                        : formatNaira(x.amountKobo)}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -357,8 +591,11 @@ export function BookingForm() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
-            {quote.vehicleClass.toLowerCase()} · {quote.plan === 'FLEX' ? 'Flex' : 'Standard'} plan · includes the driver, fuel, airport fee and free waiting.{' '}
-            {expired ? 'This price has expired.' : `Price held for ${minutesLeft} more minute${minutesLeft === 1 ? '' : 's'}.`}{' '}
+            {quote.vehicleClass.toLowerCase()} · {quote.plan === 'FLEX' ? 'Flex' : 'Standard'} plan
+            · includes the driver, fuel, airport fee and free waiting.{' '}
+            {expired
+              ? 'This price has expired.'
+              : `Price held for ${minutesLeft} more minute${minutesLeft === 1 ? '' : 's'}.`}{' '}
             <a className="underline" href="/terms">
               Terms
             </a>
@@ -369,7 +606,9 @@ export function BookingForm() {
             </Button>
           ) : (
             <Button className="w-full" size="lg" onClick={bookAndPay} disabled={busy === 'pay'}>
-              {busy === 'pay' ? 'Opening secure payment…' : `Pay ${formatNaira(quote.totalKobo)} with Paystack`}
+              {busy === 'pay'
+                ? 'Opening secure payment…'
+                : `Pay ${formatNaira(quote.totalKobo)} with Paystack`}
             </Button>
           )}
         </section>

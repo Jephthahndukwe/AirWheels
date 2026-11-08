@@ -11,6 +11,7 @@ import { AirlinesModule } from './modules/airlines/airlines.module';
 import { AuditModule } from './modules/audit/audit.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
+import { LegsModule } from './modules/bookings/legs.module';
 import { CallsModule } from './modules/calls/calls.module';
 import { ConfigStoreModule } from './modules/config/config.module';
 import { DispatchModule } from './modules/dispatch/dispatch.module';
@@ -26,6 +27,7 @@ import { PricingModule } from './modules/pricing/pricing.module';
 import { SettlementModule } from './modules/settlement/settlement.module';
 import { SupportModule } from './modules/support/support.module';
 import { TravellerAccessModule } from './modules/traveller-access/traveller-access.module';
+import { TravellerModule } from './modules/traveller-access/traveller.module';
 import { QueuesModule } from './queues/queues';
 import { RealtimeModule } from './realtime/realtime.gateway';
 
@@ -58,7 +60,9 @@ class HealthController {
     AirlinesModule,
     IntakeModule,
     BookingsModule,
+    LegsModule,
     TravellerAccessModule,
+    TravellerModule,
     FlightsModule,
     DispatchModule,
     MatchingModule,

@@ -1,13 +1,27 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Airline, BookingChannel, PricingRule, Quote } from '@prisma/client';
-import type { LegRequest, OwnQuoteRequest, PartnerQuoteRequest, Plan, QuoteResponse, RideType, VehicleClass } from '@airwheels/types';
+import type {
+  LegRequest,
+  OwnQuoteRequest,
+  PartnerQuoteRequest,
+  Plan,
+  QuoteResponse,
+  RideType,
+  VehicleClass,
+} from '@airwheels/types';
 import { FLIGHT_STATUS, type FlightStatusAdapter } from '../../adapters/interfaces';
 import { haversineKm } from '../../adapters/fakes';
 import { PrismaService } from '../../common/prisma.service';
 import { ConfigStore } from '../config/config.service';
 import { CONFIG } from '../config/keys';
 import { PickupTimesService, lagosParts } from '../dispatch/dispatch.module';
-import { type CollectedBy, type QuoteResult, QuoteError, computeQuote, suggestVehicleClass } from './engine';
+import {
+  type CollectedBy,
+  type QuoteResult,
+  QuoteError,
+  computeQuote,
+  suggestVehicleClass,
+} from './engine';
 import { MissingRuleError, buildPricingRules, rulesInForce } from './rules';
 
 /** What a quote was computed from. Stored on the quote so booking creation uses exactly the same trip. */
@@ -58,24 +72,38 @@ export class PricingService {
 
   async rulesAt(at = new Date()) {
     const rows = rulesInForce(await this.allRules(), at);
-    const shared = await this.config.get<{ maxPassengers: number; bagsPerPassenger: { large: number; small: number }; vehicleClass: string }>('shared.limits');
+    const shared = await this.config.get<{
+      maxPassengers: number;
+      bagsPerPassenger: { large: number; small: number };
+      vehicleClass: string;
+    }>('shared.limits');
     try {
       return { rows, rules: buildPricingRules(rows, shared) };
     } catch (e) {
-      if (e instanceof MissingRuleError) throw new BadRequestException({ code: 'PRICING_NOT_CONFIGURED', message: e.message });
+      if (e instanceof MissingRuleError)
+        throw new BadRequestException({ code: 'PRICING_NOT_CONFIGURED', message: e.message });
       throw e;
     }
   }
 
   async airport() {
-    const ap = await this.prisma.airport.findFirst({ where: { active: true }, orderBy: { createdAt: 'asc' } });
-    if (!ap) throw new BadRequestException({ code: 'NO_AIRPORT', message: 'No active airport is configured.' });
+    const ap = await this.prisma.airport.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!ap)
+      throw new BadRequestException({
+        code: 'NO_AIRPORT',
+        message: 'No active airport is configured.',
+      });
     return ap;
   }
 
   /** Nearest zone centre to a point. Ops-drawn polygons replace this in M6. */
   async zoneFor(point: { lat: number; lng: number }) {
-    const zones = await this.prisma.zone.findMany({ include: { corridorAreas: { include: { corridor: true } } } });
+    const zones = await this.prisma.zone.findMany({
+      include: { corridorAreas: { include: { corridor: true } } },
+    });
     let best: { code: string; km: number; corridor: string | null } | null = null;
     for (const z of zones) {
       const km = haversineKm(point, { lat: z.centerLat, lng: z.centerLng });
@@ -85,9 +113,33 @@ export class PricingService {
       }
     }
     if (!best || best.km > 8) {
-      throw new BadRequestException({ code: 'OUTSIDE_SERVICE_AREA', message: 'This address is outside the areas we serve.' });
+      throw new BadRequestException({
+        code: 'OUTSIDE_SERVICE_AREA',
+        message: 'This address is outside the areas we serve.',
+      });
     }
     return best;
+  }
+
+  /**
+   * Fare difference when a traveller moves the home end of a leg to another zone (BKG-06): the base
+   * fare for the new zone minus the old one, for the leg's vehicle class. Refuses addresses we don't serve.
+   */
+  async addressChangeDeltaKobo(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+    vehicleClass: VehicleClass,
+  ) {
+    const [a, b] = [await this.zoneFor(from), await this.zoneFor(to)];
+    const { rules } = await this.rulesAt();
+    const fare = (code: string) => rules.zoneFares[code]?.[vehicleClass];
+    const nf = fare(b.code);
+    if (nf === undefined)
+      throw new BadRequestException({
+        code: 'OUTSIDE_SERVICE_AREA',
+        message: 'This address is outside the areas we serve.',
+      });
+    return { fromZone: a.code, toZone: b.code, deltaKobo: nf - (fare(a.code) ?? nf) };
   }
 
   async suggestVehicleClass(passengers: number, bags: number): Promise<VehicleClass> {
@@ -97,7 +149,12 @@ export class PricingService {
 
   private async revenueShareBps(airline: Airline | null, channel: BookingChannel): Promise<number> {
     if (!airline) return 0;
-    if (channel === 'LINK' && (airline.settlementTerms as { shareOnLinkBookings?: boolean } | null)?.shareOnLinkBookings !== true) return 0;
+    if (
+      channel === 'LINK' &&
+      (airline.settlementTerms as { shareOnLinkBookings?: boolean } | null)?.shareOnLinkBookings !==
+        true
+    )
+      return 0;
     if (channel === 'OWN_PAGE' || channel === 'OPS') return 0;
     const { rows } = await this.rulesAt();
     const rule = rows.find((r) => r.type === 'REVENUE_SHARE' && r.key === airline.code);
@@ -122,9 +179,17 @@ export class PricingService {
         // The non-airport end decides the zone.
         const point = l.type === 'DEPARTURE' ? l.pickup.location : l.dropoff.location;
         const zone = await this.zoneFor(point);
-        const km = (haversineKm(point, { lat: airport.lat, lng: airport.lng }) * roadFactorBps) / 10_000;
+        const km =
+          (haversineKm(point, { lat: airport.lat, lng: airport.lng }) * roadFactorBps) / 10_000;
         const local = lagosParts(pickupTimes[i]!);
-        return { type: l.type, zoneCode: zone.code, corridor: zone.corridor, distanceKm: Math.round(km * 10) / 10, localDate: local.date, localHour: local.hour };
+        return {
+          type: l.type,
+          zoneCode: zone.code,
+          corridor: zone.corridor,
+          distanceKm: Math.round(km * 10) / 10,
+          localDate: local.date,
+          localHour: local.hour,
+        };
       }),
     );
     const revenueShareBps = await this.revenueShareBps(airline, channel);
@@ -149,11 +214,15 @@ export class PricingService {
         rules,
       );
     } catch (e) {
-      if (e instanceof QuoteError) throw new BadRequestException({ code: e.code, message: e.message });
+      if (e instanceof QuoteError)
+        throw new BadRequestException({ code: e.code, message: e.message });
       throw e;
     }
 
-    const expiryMinutes = airline && channel !== 'LINK' ? airline.quoteExpiryMinutes : await this.config.get<number>(CONFIG.ownChannelQuoteExpiryMinutes);
+    const expiryMinutes =
+      airline && channel !== 'LINK'
+        ? airline.quoteExpiryMinutes
+        : await this.config.get<number>(CONFIG.ownChannelQuoteExpiryMinutes);
     const expiresAt = new Date(Date.now() + expiryMinutes * 60_000);
     const breakdown: StoredBreakdown = {
       ...result,
@@ -180,9 +249,18 @@ export class PricingService {
 
   /** Airline widget and booking engine (CHN-02). */
   async quotePartner(req: PartnerQuoteRequest, airline: Airline | null) {
-    const vehicleClass = req.vehicleClass ?? (await this.suggestVehicleClass(req.passengers, req.bags));
+    const vehicleClass =
+      req.vehicleClass ?? (await this.suggestVehicleClass(req.passengers, req.bags));
     const { response } = await this.price({
-      request: { legs: req.legs, passengers: req.passengers, bags: req.bags, rideType: req.rideType, plan: req.plan, vehicleClass, extras: { childSeats: 0, extraStops: 0 } },
+      request: {
+        legs: req.legs,
+        passengers: req.passengers,
+        bags: req.bags,
+        rideType: req.rideType,
+        plan: req.plan,
+        vehicleClass,
+        extras: { childSeats: 0, extraStops: 0 },
+      },
       airline,
       channel: airline ? 'WIDGET' : 'OWN_PAGE',
       collectedBy: airline ? 'AIRLINE' : 'AIRWHEELS',
@@ -191,22 +269,46 @@ export class PricingService {
   }
 
   /** Turns our page's legs (flight number + one address) into full legs, validating each flight (6.2). */
-  async buildOwnRequest(req: OwnQuoteRequest): Promise<{ request: StoredQuoteRequest; airline: Airline | null }> {
-    const airline = req.airlineCode ? await this.prisma.airline.findUnique({ where: { code: req.airlineCode.toUpperCase() } }) : null;
-    if (req.airlineCode && (!airline || airline.status !== 'ACTIVE')) throw new NotFoundException({ code: 'AIRLINE_UNKNOWN', message: 'We do not know that airline.' });
+  async buildOwnRequest(
+    req: OwnQuoteRequest,
+  ): Promise<{ request: StoredQuoteRequest; airline: Airline | null }> {
+    const airline = req.airlineCode
+      ? await this.prisma.airline.findUnique({ where: { code: req.airlineCode.toUpperCase() } })
+      : null;
+    if (req.airlineCode && (!airline || airline.status !== 'ACTIVE'))
+      throw new NotFoundException({
+        code: 'AIRLINE_UNKNOWN',
+        message: 'We do not know that airline.',
+      });
     const ap = await this.airport();
-    const airportAddress = { text: `${ap.name}, ${ap.terminal} terminal`, location: { lat: ap.lat, lng: ap.lng } };
+    const airportAddress = {
+      text: `${ap.name}, ${ap.terminal} terminal`,
+      location: { lat: ap.lat, lng: ap.lng },
+    };
     const today = lagosParts(new Date()).date;
     const legs: LegRequest[] = [];
     for (const l of req.legs) {
-      if (l.date < today) throw new BadRequestException({ code: 'FLIGHT_IN_PAST', message: `${l.flightNumber} on ${l.date} has already gone. Check the date.` });
-      const f = await this.flights.lookup(l.flightNumber, l.date, { leg: l.type, airport: ap.iata });
+      if (l.date < today)
+        throw new BadRequestException({
+          code: 'FLIGHT_IN_PAST',
+          message: `${l.flightNumber} on ${l.date} has already gone. Check the date.`,
+        });
+      const f = await this.flights.lookup(l.flightNumber, l.date, {
+        leg: l.type,
+        airport: ap.iata,
+      });
       if (!f?.scheduledDeparture || !f.scheduledArrival) {
-        throw new BadRequestException({ code: 'FLIGHT_NOT_FOUND', message: `We could not find flight ${l.flightNumber} on ${l.date}. Check the number and date.` });
+        throw new BadRequestException({
+          code: 'FLIGHT_NOT_FOUND',
+          message: `We could not find flight ${l.flightNumber} on ${l.date}. Check the number and date.`,
+        });
       }
       const touchesUs = l.type === 'DEPARTURE' ? f.origin === ap.iata : f.destination === ap.iata;
       if (f.origin && f.destination && !touchesUs) {
-        throw new BadRequestException({ code: 'FLIGHT_WRONG_AIRPORT', message: `${l.flightNumber} does not ${l.type === 'DEPARTURE' ? 'leave from' : 'land at'} ${ap.iata}.` });
+        throw new BadRequestException({
+          code: 'FLIGHT_WRONG_AIRPORT',
+          message: `${l.flightNumber} does not ${l.type === 'DEPARTURE' ? 'leave from' : 'land at'} ${ap.iata}.`,
+        });
       }
       legs.push({
         type: l.type,
@@ -224,21 +326,43 @@ export class PricingService {
       });
     }
     legs.sort((a, b) => (a.type === b.type ? 0 : a.type === 'DEPARTURE' ? -1 : 1));
-    const vehicleClass = req.rideType === 'SHARED' ? 'SUV' : (req.vehicleClass ?? (await this.suggestVehicleClass(req.passengers, req.bags)));
+    const vehicleClass =
+      req.rideType === 'SHARED'
+        ? 'SUV'
+        : (req.vehicleClass ?? (await this.suggestVehicleClass(req.passengers, req.bags)));
     return {
       airline,
-      request: { legs, passengers: req.passengers, bags: req.bags, rideType: req.rideType, plan: req.plan, vehicleClass, extras: req.extras, promoCode: req.promoCode, airlineCode: airline?.code },
+      request: {
+        legs,
+        passengers: req.passengers,
+        bags: req.bags,
+        rideType: req.rideType,
+        plan: req.plan,
+        vehicleClass,
+        extras: req.extras,
+        promoCode: req.promoCode,
+        airlineCode: airline?.code,
+      },
     };
   }
 
   /** Our booking page and the post-booking link (CHN-04, CHN-05). We collect by Paystack. */
   async quoteOwn(req: OwnQuoteRequest, channel: BookingChannel = 'OWN_PAGE') {
     const { request, airline } = await this.buildOwnRequest(req);
-    return this.price({ request, airline, channel: airline && channel === 'OWN_PAGE' ? 'LINK' : channel, collectedBy: 'AIRWHEELS' });
+    return this.price({
+      request,
+      airline,
+      channel: airline && channel === 'OWN_PAGE' ? 'LINK' : channel,
+      collectedBy: 'AIRWHEELS',
+    });
   }
 }
 
-export function toResponse(quote: Quote, request: StoredQuoteRequest, b: StoredBreakdown): QuoteResponse {
+export function toResponse(
+  quote: Quote,
+  request: StoredQuoteRequest,
+  b: StoredBreakdown,
+): QuoteResponse {
   return {
     quoteId: quote.id,
     currency: 'NGN',

@@ -1,7 +1,20 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { Airline, BookingChannel, BookingStatus, CollectedBy, Prisma, Quote } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type {
+  Airline,
+  BookingChannel,
+  BookingStatus,
+  CollectedBy,
+  Prisma,
+  Quote,
+} from '@prisma/client';
 import type { PartnerBookingRequest, PartnerBookingUpdate } from '@airwheels/types';
-import { decrypt, encrypt } from '../../common/crypto';
+import { encrypt } from '../../common/crypto';
 import { track } from '../../common/observability';
 import { PrismaService } from '../../common/prisma.service';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
@@ -38,7 +51,8 @@ export const BOOKING_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
   REFUNDED: [],
 };
 
-export const canMove = (from: BookingStatus, to: BookingStatus) => from === to || BOOKING_TRANSITIONS[from].includes(to);
+export const canMove = (from: BookingStatus, to: BookingStatus) =>
+  from === to || BOOKING_TRANSITIONS[from].includes(to);
 
 /**
  * TransferBooking aggregate (PRD 8). One parent record per airline booking reference, up to two
@@ -78,18 +92,33 @@ export class BookingsService {
   }) {
     const { airline, payload } = input;
     const status = input.status ?? 'CONFIRMED';
-    const checked = input.quote ? { flagged: input.quote.flagged, reason: input.quote.flagged ? 'MARGIN_BELOW_FLOOR' : undefined, quote: input.quote } : await this.checkQuote(payload);
+    const checked = input.quote
+      ? {
+          flagged: input.quote.flagged,
+          reason: input.quote.flagged ? 'MARGIN_BELOW_FLOOR' : undefined,
+          quote: input.quote,
+        }
+      : await this.checkQuote(payload);
     const { flagged, reason, quote } = checked;
     const breakdown = (quote?.breakdown as StoredBreakdown | null) ?? null;
 
-    const pickupTimes = breakdown?.pickupTimes?.length === payload.legs.length
-      ? breakdown.pickupTimes.map((t) => new Date(t))
-      : await Promise.all(payload.legs.map((leg) => this.pickupTimes.forLeg(leg)));
-    const lastLegEnd = Math.max(...payload.legs.map((l) => new Date(l.flight.scheduledArrival).getTime()));
+    const pickupTimes =
+      breakdown?.pickupTimes?.length === payload.legs.length
+        ? breakdown.pickupTimes.map((t) => new Date(t))
+        : await Promise.all(payload.legs.map((leg) => this.pickupTimes.forLeg(leg)));
+    const lastLegEnd = Math.max(
+      ...payload.legs.map((l) => new Date(l.flight.scheduledArrival).getTime()),
+    );
     const linkHours = await this.config.get<number>(CONFIG.trackingLinkHoursAfterLastLeg);
-    const { token, data: tokenData } = this.access.newToken(new Date(lastLegEnd + linkHours * 3_600_000));
-    const vehicleClass = breakdown?.vehicleClass ?? (await this.pricing.suggestVehicleClass(payload.passengers, payload.bags));
-    const airlineShareKobo = breakdown?.airlineShareKobo ?? Math.round((payload.paidAmountKobo * (airline?.revenueShareBps ?? 0)) / 10_000);
+    const { token, data: tokenData } = this.access.newToken(
+      new Date(lastLegEnd + linkHours * 3_600_000),
+    );
+    const vehicleClass =
+      breakdown?.vehicleClass ??
+      (await this.pricing.suggestVehicleClass(payload.passengers, payload.bags));
+    const airlineShareKobo =
+      breakdown?.airlineShareKobo ??
+      Math.round((payload.paidAmountKobo * (airline?.revenueShareBps ?? 0)) / 10_000);
 
     const booking = await this.prisma.$transaction(async (tx) => {
       const b = await tx.transferBooking.create({
@@ -118,9 +147,16 @@ export class BookingsService {
       });
       // Freeze the quote with the booking (BKG-04). The DB lets lockedAt be set only once.
       if (quote && !quote.lockedAt) {
-        const locked = await tx.quote.updateMany({ where: { id: quote.id, lockedAt: null }, data: { lockedAt: new Date() } });
+        const locked = await tx.quote.updateMany({
+          where: { id: quote.id, lockedAt: null },
+          data: { lockedAt: new Date() },
+        });
         // Our channel: one booking per quote. A second, concurrent booking on the same price rolls back.
-        if (input.quote && locked.count !== 1) throw new ConflictException({ code: 'QUOTE_USED', message: 'This price was already used for a booking.' });
+        if (input.quote && locked.count !== 1)
+          throw new ConflictException({
+            code: 'QUOTE_USED',
+            message: 'This price was already used for a booking.',
+          });
       }
 
       for (const [i, leg] of payload.legs.entries()) {
@@ -142,7 +178,9 @@ export class BookingsService {
             scheduledAt: pickupTimes[i],
             nextActionAt: status === 'CONFIRMED' ? pickupTimes[i] : null,
             vehicleClass,
-            amountKobo: breakdown?.legs?.[i]?.amountKobo ?? Math.round(payload.paidAmountKobo / payload.legs.length),
+            amountKobo:
+              breakdown?.legs?.[i]?.amountKobo ??
+              Math.round(payload.paidAmountKobo / payload.legs.length),
             pickupCodeHash: 'pending',
           },
         });
@@ -152,11 +190,18 @@ export class BookingsService {
         });
       }
 
-      await this.event(tx, b.id, status === 'CONFIRMED' ? 'booking.confirmed' : 'booking.pending_payment', input.actor ?? { role: 'SYSTEM' }, flagged ? reason : undefined, {
-        channel: input.channel,
-        collectedBy: input.collectedBy,
-        quoteId: quote?.id,
-      });
+      await this.event(
+        tx,
+        b.id,
+        status === 'CONFIRMED' ? 'booking.confirmed' : 'booking.pending_payment',
+        input.actor ?? { role: 'SYSTEM' },
+        flagged ? reason : undefined,
+        {
+          channel: input.channel,
+          collectedBy: input.collectedBy,
+          quoteId: quote?.id,
+        },
+      );
       return tx.transferBooking.findUniqueOrThrow({ where: { id: b.id }, include: { legs: true } });
     });
 
@@ -172,30 +217,55 @@ export class BookingsService {
   }
 
   /** Moves a booking to a new state with an event, refusing moves PRD 8.4 does not allow. */
-  async transition(id: string, to: BookingStatus, actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string }, reason?: string, data?: object, tx?: Tx) {
+  async transition(
+    id: string,
+    to: BookingStatus,
+    actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string },
+    reason?: string,
+    data?: object,
+    tx?: Tx,
+  ) {
     const run = async (t: Tx) => {
       const b = await t.transferBooking.findUniqueOrThrow({ where: { id } });
       if (b.status === to) return { changed: false, from: b.status };
       if (!canMove(b.status, to)) {
-        throw new BadRequestException({ code: 'BOOKING_STATE', message: `A ${b.status.toLowerCase()} booking cannot become ${to.toLowerCase()}.` });
+        throw new BadRequestException({
+          code: 'BOOKING_STATE',
+          message: `A ${b.status.toLowerCase()} booking cannot become ${to.toLowerCase()}.`,
+        });
       }
       // Compare-and-set, so two workers cannot both make the same move.
-      const r = await t.transferBooking.updateMany({ where: { id, status: b.status }, data: { status: to } });
+      const r = await t.transferBooking.updateMany({
+        where: { id, status: b.status },
+        data: { status: to },
+      });
       if (r.count !== 1) return { changed: false, from: b.status };
-      await this.event(t, id, `booking.${to.toLowerCase()}`, actor, reason, { from: b.status, ...(data ?? {}) });
+      await this.event(t, id, `booking.${to.toLowerCase()}`, actor, reason, {
+        from: b.status,
+        ...(data ?? {}),
+      });
       return { changed: true, from: b.status };
     };
     const res = tx ? await run(tx) : await this.prisma.$transaction(run);
-    if (res.changed) this.realtime.emit(`booking:${id}`, 'booking.updated', { bookingId: id, status: to });
+    if (res.changed)
+      this.realtime.emit(`booking:${id}`, 'booking.updated', { bookingId: id, status: to });
     return res;
   }
 
   /** Our channel: payment confirmed by Paystack (via webhook or reconciliation). Legs get their next action. */
   async confirmPaid(bookingId: string, tx: Tx, data: object) {
-    const res = await this.transition(bookingId, 'CONFIRMED', { role: 'SYSTEM' }, 'payment succeeded', data, tx);
+    const res = await this.transition(
+      bookingId,
+      'CONFIRMED',
+      { role: 'SYSTEM' },
+      'payment succeeded',
+      data,
+      tx,
+    );
     if (res.changed) {
       const legs = await tx.rideLeg.findMany({ where: { bookingId } });
-      for (const l of legs) await tx.rideLeg.update({ where: { id: l.id }, data: { nextActionAt: l.scheduledAt } });
+      for (const l of legs)
+        await tx.rideLeg.update({ where: { id: l.id }, data: { nextActionAt: l.scheduledAt } });
     }
     return res;
   }
@@ -203,8 +273,12 @@ export class BookingsService {
   // ---------- steps after confirmation (run by the bookings queue) ----------
 
   async runAfterConfirm(bookingId: string) {
-    const b = await this.prisma.transferBooking.findUniqueOrThrow({ where: { id: bookingId }, include: { airline: true } });
-    if (!['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(b.status)) return { skipped: `status ${b.status}` };
+    const b = await this.prisma.transferBooking.findUniqueOrThrow({
+      where: { id: bookingId },
+      include: { airline: true },
+    });
+    if (!['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(b.status))
+      return { skipped: `status ${b.status}` };
     await this.steps.run(bookingId, 'post_ledger', () => this.postSale(bookingId));
     await this.steps.run(bookingId, 'notify_confirmed', () => this.notifyConfirmed(bookingId));
     return { done: true };
@@ -222,11 +296,17 @@ export class BookingsService {
       airportFeeKobo: bd?.airportFeeKobo ?? 0,
       taxKobo: bd?.taxKobo ?? 0,
       airlineShareKobo: b.airlineShareKobo,
-      disruptionReserveKobo: bd?.legs?.reduce((s, l) => s + (l.cost?.disruptionReserveKobo ?? 0), 0) ?? 0,
+      disruptionReserveKobo:
+        bd?.legs?.reduce((s, l) => s + (l.cost?.disruptionReserveKobo ?? 0), 0) ?? 0,
     };
     if (b.collectedBy === 'AIRLINE') {
       if (!b.airline) throw new Error('Airline-collected booking without an airline');
-      const p = airlineCollectedSale({ ...amounts, reference: `sale:${b.id}`, bookingId: b.id, airline: { id: b.airline.id, code: b.airline.code } });
+      const p = airlineCollectedSale({
+        ...amounts,
+        reference: `sale:${b.id}`,
+        bookingId: b.id,
+        airline: { id: b.airline.id, code: b.airline.code },
+      });
       return this.ledger.post(p);
     }
     const intent = b.paymentIntents[0];
@@ -237,7 +317,8 @@ export class BookingsService {
       reference: `payment:${intent.id}`,
       bookingId: b.id,
       gatewayFeeKobo: intent.gatewayFeeKobo ?? 0,
-      airline: b.airline && b.airlineShareKobo > 0 ? { id: b.airline.id, code: b.airline.code } : null,
+      airline:
+        b.airline && b.airlineShareKobo > 0 ? { id: b.airline.id, code: b.airline.code } : null,
     });
     return this.ledger.post(p);
   }
@@ -245,21 +326,16 @@ export class BookingsService {
   private async notifyConfirmed(bookingId: string) {
     const b = await this.prisma.transferBooking.findUniqueOrThrow({
       where: { id: bookingId },
-      include: { airline: true, traveller: true, trackingToken: true, legs: true },
+      include: { traveller: true },
     });
     if (!b.traveller) return { sent: false, reason: 'no traveller' };
-    const token = b.trackingToken?.tokenEncrypted ? decrypt(b.trackingToken.tokenEncrypted) : null;
-    await this.messaging.enqueueTraveller({
-      bookingId: b.id,
-      event: 'booking.confirmed',
-      to: b.traveller.phone,
-      whatsapp: b.traveller.whatsapp,
-      variables: {
-        serviceName: b.airline?.serviceBrandName ?? 'Airwheels',
-        trackingUrl: token ? this.access.trackingUrl(token) : '',
-        pickupCodes: b.legs.map((l) => pickupCodeFor(l.id, l.pickupCodeVersion)).join(' / '),
+    // PRD 7.1: shared bookings get the matching message with the no-match promise.
+    await this.messaging.notify(
+      b.rideType === 'SHARED' ? 'shared.confirmed' : 'booking.confirmed',
+      {
+        bookingId: b.id,
       },
-    });
+    );
     return { sent: true };
   }
 
@@ -271,26 +347,49 @@ export class BookingsService {
     const quote = await this.prisma.quote.findUnique({ where: { id: payload.quoteId } });
     if (!quote) return { flagged: true, reason: 'UNKNOWN_QUOTE', quote: null };
     const tolerancePct = await this.config.get<number>(CONFIG.quoteTolerancePct);
-    const diffPct = (Math.abs(quote.totalKobo - payload.paidAmountKobo) / Math.max(1, quote.totalKobo)) * 100;
+    const diffPct =
+      (Math.abs(quote.totalKobo - payload.paidAmountKobo) / Math.max(1, quote.totalKobo)) * 100;
     if (diffPct > tolerancePct) return { flagged: true, reason: 'PRICE_MISMATCH', quote };
-    if (quote.expiresAt < new Date()) return { flagged: false, reason: 'QUOTE_EXPIRED_WITHIN_TOLERANCE', quote };
-    return { flagged: quote.flagged, reason: quote.flagged ? 'MARGIN_BELOW_FLOOR' : undefined, quote };
+    if (quote.expiresAt < new Date())
+      return { flagged: false, reason: 'QUOTE_EXPIRED_WITHIN_TOLERANCE', quote };
+    return {
+      flagged: quote.flagged,
+      reason: quote.flagged ? 'MARGIN_BELOW_FLOOR' : undefined,
+      quote,
+    };
   }
 
   findByReference(airlineId: string, reference: string) {
     return this.prisma.transferBooking.findUnique({
-      where: { airlineId_airlineBookingReference: { airlineId, airlineBookingReference: reference } },
+      where: {
+        airlineId_airlineBookingReference: { airlineId, airlineBookingReference: reference },
+      },
       include: { legs: true, traveller: true, events: { orderBy: { time: 'asc' } } },
     });
   }
 
   async update(airline: Airline, reference: string, patch: PartnerBookingUpdate) {
     const b = await this.findByReference(airline.id, reference);
-    if (!b) throw new NotFoundException({ code: 'BOOKING_NOT_FOUND', message: 'No booking with that reference.' });
+    if (!b)
+      throw new NotFoundException({
+        code: 'BOOKING_NOT_FOUND',
+        message: 'No booking with that reference.',
+      });
     await this.prisma.$transaction(async (tx) => {
-      await tx.transferBooking.update({ where: { id: b.id }, data: { passengers: patch.passengers, bags: patch.bags } });
-      if (patch.traveller) await tx.traveller.update({ where: { bookingId: b.id }, data: patch.traveller });
-      await this.event(tx, b.id, 'booking.updated', { role: 'SYSTEM' }, 'airline update', patch as object);
+      await tx.transferBooking.update({
+        where: { id: b.id },
+        data: { passengers: patch.passengers, bags: patch.bags },
+      });
+      if (patch.traveller)
+        await tx.traveller.update({ where: { bookingId: b.id }, data: patch.traveller });
+      await this.event(
+        tx,
+        b.id,
+        'booking.updated',
+        { role: 'SYSTEM' },
+        'airline update',
+        patch as object,
+      );
     });
     // Leg and flight changes are re-planned by dispatch in M4/M7.
     this.realtime.emit(`booking:${b.id}`, 'booking.updated', { bookingId: b.id });
@@ -299,18 +398,29 @@ export class BookingsService {
 
   async cancel(airline: Airline, reference: string, reason?: string) {
     const b = await this.findByReference(airline.id, reference);
-    if (!b) throw new NotFoundException({ code: 'BOOKING_NOT_FOUND', message: 'No booking with that reference.' });
+    if (!b)
+      throw new NotFoundException({
+        code: 'BOOKING_NOT_FOUND',
+        message: 'No booking with that reference.',
+      });
     await this.cancelById(b.id, { role: 'SYSTEM' }, reason ?? 'airline cancelled');
     return this.findByReference(airline.id, reference);
   }
 
   /** Cancels the booking and its legs. The refund amount is a separate decision (policy engine, M7; ops refund now). */
-  async cancelById(id: string, actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string }, reason: string) {
+  async cancelById(
+    id: string,
+    actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string },
+    reason: string,
+  ) {
     const b = await this.prisma.transferBooking.findUniqueOrThrow({ where: { id } });
     if (b.status === 'CANCELLED') return b;
     await this.prisma.$transaction(async (tx) => {
       await this.transition(id, 'CANCELLED', actor, reason, undefined, tx);
-      await tx.rideLeg.updateMany({ where: { bookingId: id }, data: { status: 'CANCELLED', nextActionAt: null } });
+      await tx.rideLeg.updateMany({
+        where: { bookingId: id },
+        data: { status: 'CANCELLED', nextActionAt: null },
+      });
     });
     return this.prisma.transferBooking.findUniqueOrThrow({ where: { id } });
   }
@@ -347,9 +457,31 @@ export class BookingsService {
         legs: { include: { flight: true }, orderBy: { type: 'asc' } },
         events: { orderBy: { time: 'asc' } },
         steps: { orderBy: { createdAt: 'asc' } },
-        paymentIntents: { orderBy: { createdAt: 'asc' }, select: { id: true, gatewayReference: true, amountKobo: true, status: true, gatewayFeeKobo: true, paidAt: true, failureReason: true, createdAt: true, authorizationUrl: true } },
+        paymentIntents: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            gatewayReference: true,
+            amountKobo: true,
+            status: true,
+            gatewayFeeKobo: true,
+            paidAt: true,
+            failureReason: true,
+            createdAt: true,
+            authorizationUrl: true,
+          },
+        },
         refunds: { orderBy: { createdAt: 'asc' } },
-        quote: { select: { id: true, expiresAt: true, lockedAt: true, totalKobo: true, flagged: true, channel: true } },
+        quote: {
+          select: {
+            id: true,
+            expiresAt: true,
+            lockedAt: true,
+            totalKobo: true,
+            flagged: true,
+            channel: true,
+          },
+        },
       },
     });
     if (!b) throw new NotFoundException({ code: 'BOOKING_NOT_FOUND', message: 'No such booking.' });
@@ -382,7 +514,9 @@ export class BookingsService {
       status: b.status,
       traveller: b.traveller?.name,
       since: b.updatedAt,
-      failedSteps: b.steps.filter((s) => s.status === 'FAILED').map((s) => ({ step: s.step, error: s.error })),
+      failedSteps: b.steps
+        .filter((s) => s.status === 'FAILED')
+        .map((s) => ({ step: s.step, error: s.error })),
     }));
   }
 
@@ -390,7 +524,10 @@ export class BookingsService {
   async retry(id: string) {
     const b = await this.prisma.transferBooking.findUniqueOrThrow({ where: { id } });
     if (!['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'].includes(b.status)) {
-      throw new BadRequestException({ code: 'NOTHING_TO_RETRY', message: `Nothing to retry for a ${b.status.toLowerCase()} booking.` });
+      throw new BadRequestException({
+        code: 'NOTHING_TO_RETRY',
+        message: `Nothing to retry for a ${b.status.toLowerCase()} booking.`,
+      });
     }
     await this.steps.enqueueAfterConfirm(id, { retry: true });
     return { queued: true };
@@ -411,14 +548,35 @@ export class BookingsService {
     return { requeued: rows.length };
   }
 
-  private event(tx: Tx, bookingId: string, type: string, actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string }, reason?: string, data?: object) {
+  private event(
+    tx: Tx,
+    bookingId: string,
+    type: string,
+    actor: { role: 'SYSTEM' | 'OPS' | 'TRAVELLER'; id?: string },
+    reason?: string,
+    data?: object,
+  ) {
     return tx.bookingEvent.create({
-      data: { bookingId, type, actorRole: actor.role, actorId: actor.id, reason, data: data as Prisma.InputJsonValue | undefined },
+      data: {
+        bookingId,
+        type,
+        actorRole: actor.role,
+        actorId: actor.id,
+        reason,
+        data: data as Prisma.InputJsonValue | undefined,
+      },
     });
   }
 }
 
 /** Keep raw payloads for debugging (8.6) without contact details. */
 function redact(p: PartnerBookingRequest): object {
-  return { ...p, traveller: { ...p.traveller, phone: '[redacted]', email: p.traveller.email ? '[redacted]' : undefined } };
+  return {
+    ...p,
+    traveller: {
+      ...p.traveller,
+      phone: '[redacted]',
+      email: p.traveller.email ? '[redacted]' : undefined,
+    },
+  };
 }

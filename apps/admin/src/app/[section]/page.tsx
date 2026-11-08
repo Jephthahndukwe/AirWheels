@@ -9,7 +9,9 @@ export default async function Section({ params }: { params: Promise<{ section: s
   return (
     <div>
       <h1 className="mb-2 text-2xl font-bold">{item.label}</h1>
-      <p className="text-slate">This module is planned for milestone {item.milestone} (PRD section 24).</p>
+      <p className="text-slate">
+        This module is planned for milestone {item.milestone} (PRD section 24).
+      </p>
     </div>
   );
 }

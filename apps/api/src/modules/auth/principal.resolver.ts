@@ -72,8 +72,12 @@ export class PrincipalResolver {
     const timestamp = req.header(PARTNER_HEADERS.timestamp);
     const signature = req.header(PARTNER_HEADERS.signature);
     if (!keyId || !timestamp || !signature) return null;
-    const credential = await this.prisma.airlineCredential.findUnique({ where: { keyId }, include: { airline: true } });
-    if (!credential || credential.status !== 'ACTIVE' || credential.airline.status !== 'ACTIVE') return null;
+    const credential = await this.prisma.airlineCredential.findUnique({
+      where: { keyId },
+      include: { airline: true },
+    });
+    if (!credential || credential.status !== 'ACTIVE' || credential.airline.status !== 'ACTIVE')
+      return null;
     if (credential.expiresAt && credential.expiresAt <= new Date()) return null;
     if (!ipAllowed(clientIp(req), credential.allowedIps)) return null;
     const body = req.rawBody?.toString('utf8') ?? '';

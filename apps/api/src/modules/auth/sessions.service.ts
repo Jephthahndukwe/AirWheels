@@ -77,11 +77,26 @@ export class SessionsService {
     if (s.kind === 'ADMIN') {
       const a = s.user.adminProfile;
       if (!a || !s.user.email) return null;
-      return { kind: 'admin', role: a.role, userId: s.userId, adminId: a.id, sessionId: s.id, email: s.user.email, name: a.name };
+      return {
+        kind: 'admin',
+        role: a.role,
+        userId: s.userId,
+        adminId: a.id,
+        sessionId: s.id,
+        email: s.user.email,
+        name: a.name,
+      };
     }
     const d = s.user.driverProfile;
     if (!d || d.status !== 'ACTIVE' || !s.user.phone) return null;
-    return { kind: 'driver', role: 'DRIVER', userId: s.userId, driverId: d.id, sessionId: s.id, phone: s.user.phone };
+    return {
+      kind: 'driver',
+      role: 'DRIVER',
+      userId: s.userId,
+      driverId: d.id,
+      sessionId: s.id,
+      phone: s.user.phone,
+    };
   }
 
   private async touch(id: string, lastSeenAt: Date) {
@@ -90,16 +105,27 @@ export class SessionsService {
   }
 
   async revokeOne(id: string, reason: string) {
-    await this.prisma.session.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date(), revokeReason: reason } });
+    await this.prisma.session.updateMany({
+      where: { id, revokedAt: null },
+      data: { revokedAt: new Date(), revokeReason: reason },
+    });
   }
 
   /**
    * Ends every live session of a user (suspension, disable, new device). Drivers also get a
    * `session.revoked` push on their WebSocket room so the app signs out at once.
    */
-  async revokeAllForUser(userId: string, reason: string, opts: { exceptSessionId?: string; driverId?: string } = {}) {
+  async revokeAllForUser(
+    userId: string,
+    reason: string,
+    opts: { exceptSessionId?: string; driverId?: string } = {},
+  ) {
     const r = await this.prisma.session.updateMany({
-      where: { userId, revokedAt: null, ...(opts.exceptSessionId ? { id: { not: opts.exceptSessionId } } : {}) },
+      where: {
+        userId,
+        revokedAt: null,
+        ...(opts.exceptSessionId ? { id: { not: opts.exceptSessionId } } : {}),
+      },
       data: { revokedAt: new Date(), revokeReason: reason },
     });
     if (opts.driverId) this.realtime.emit(`driver:${opts.driverId}`, 'session.revoked', { reason });

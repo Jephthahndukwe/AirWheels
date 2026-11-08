@@ -19,14 +19,14 @@ pnpm dev
 3. applies migrations and seeds data (`pnpm db:migrate`, `pnpm db:seed`)
 4. starts every app with Turborepo (`pnpm dev:apps`)
 
-| What | URL |
-| --- | --- |
-| API (REST + WebSocket `/rt`) | http://localhost:4000/v1/health |
-| API docs (OpenAPI) | http://localhost:4000/docs |
-| Booking page and tracking pages | http://localhost:3000 |
-| Admin dashboard | http://localhost:3001 |
-| Widget host page (fake airline checkout) | http://localhost:3002 |
-| Mock airline control panel | http://localhost:4100 |
+| What                                     | URL                             |
+| ---------------------------------------- | ------------------------------- |
+| API (REST + WebSocket `/rt`)             | http://localhost:4000/v1/health |
+| API docs (OpenAPI)                       | http://localhost:4000/docs      |
+| Booking page and tracking pages          | http://localhost:3000           |
+| Admin dashboard                          | http://localhost:3001           |
+| Widget host page (fake airline checkout) | http://localhost:3002           |
+| Mock airline control panel               | http://localhost:4100           |
 
 ### First sign-in to the admin (M1)
 
@@ -108,15 +108,15 @@ The rest are module boundaries with the milestone that fills them noted at the t
 
 ## Scripts
 
-| Command | Does |
-| --- | --- |
-| `pnpm dev` | Full local stack (env, Docker, migrate, seed, all apps) |
-| `pnpm dev:apps` | Apps only, if Postgres and Redis are already running |
-| `pnpm lint` / `typecheck` / `test` / `build` | Same checks as CI |
-| `pnpm --filter @airwheels/web test:e2e` | Playwright on a mobile viewport |
-| `pnpm --filter @airwheels/driver test:maestro` | Maestro flows (needs an emulator and Maestro installed) |
-| `pnpm openapi` | Regenerate the OpenAPI spec and typed client (no database needed) |
-| `pnpm infra:down` | Stop Postgres and Redis |
+| Command                                        | Does                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------- |
+| `pnpm dev`                                     | Full local stack (env, Docker, migrate, seed, all apps)           |
+| `pnpm dev:apps`                                | Apps only, if Postgres and Redis are already running              |
+| `pnpm lint` / `typecheck` / `test` / `build`   | Same checks as CI                                                 |
+| `pnpm --filter @airwheels/web test:e2e`        | Playwright on a mobile viewport                                   |
+| `pnpm --filter @airwheels/driver test:maestro` | Maestro flows (needs an emulator and Maestro installed)           |
+| `pnpm openapi`                                 | Regenerate the OpenAPI spec and typed client (no database needed) |
+| `pnpm infra:down`                              | Stop Postgres and Redis                                           |
 
 ## Observability
 
@@ -124,11 +124,11 @@ Sentry (API, web, admin, driver app) and PostHog (API, web) start only when thei
 
 ## Keys and secrets
 
-| Variable | Used for | Where it lives |
-| --- | --- | --- |
-| `APP_ENCRYPTION_KEY` | Encrypting airline signing secrets at rest (AES-256-GCM) | Environment only. Locally `.env`, in staging and production the secrets manager. Never in the database or repo. |
-| `APP_ENCRYPTION_KEY_PREVIOUS` | Decrypting with the old key during a rotation | Set only during a rotation |
-| `PICKUP_CODE_KEY` | Deriving 4-digit pickup codes | Environment only, same as above |
+| Variable                      | Used for                                                 | Where it lives                                                                                                  |
+| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `APP_ENCRYPTION_KEY`          | Encrypting airline signing secrets at rest (AES-256-GCM) | Environment only. Locally `.env`, in staging and production the secrets manager. Never in the database or repo. |
+| `APP_ENCRYPTION_KEY_PREVIOUS` | Decrypting with the old key during a rotation            | Set only during a rotation                                                                                      |
+| `PICKUP_CODE_KEY`             | Deriving 4-digit pickup codes                            | Environment only, same as above                                                                                 |
 
 The database holds only ciphertext (`AirlineCredential.secretEncrypted`). Without the key it is useless.
 The API refuses to start an encryption or decryption if a key is missing or malformed.
@@ -179,6 +179,53 @@ PAYSTACK_PUBLIC_KEY=pk_test_...
 ```
 
 Point the Paystack dashboard's test webhook URL at `https://<your tunnel>/v1/webhooks/payments`. Without a webhook (for example on localhost), reconciliation settles the payment within `payments.pendingCheckAfterMinutes`, or run it from **Payments**. Note that with `ADAPTERS_MODE=live` every other provider without a live adapter still uses its fake, which is only allowed in development.
+
+## Traveller experience (M3)
+
+Everything the traveller sees after booking, with no app to install (PRD 5.1, 7, 16).
+
+- **Tracking link** `/t/<token>`: a 32-character random token (only its hash is stored). It works until `traveller.trackingLinkHoursAfterLastLeg` after the last leg, then shows the receipt only. The page shows the timeline, flight status, driver card, a live map with ETA (WebSocket, polling every 20 s when the socket is down), the pickup code from its leg, masked call, support and emergency buttons, the receipt and rating, and a shared ride's stop number. First load is about 175 KB on a cold cache (budget 200 KB, checked in CI on throttled slow 3G).
+- **Change and cancel** need a six-digit code texted to the booking's phone (`traveller.changeCode`: 5 minutes, 5 tries, resend cooldown). The cost is shown before confirming, from the rule set in `traveller.changeRules` behind `ChangePolicy`, which the M7 policy engine replaces. Fees are raised to ops as `FEE_TO_COLLECT`; refunds go back by their route.
+- **Messages** (`apps/api/src/modules/messaging`): every PRD 7.1 message, including the shared ride ones, has a template per airline and channel, edited in the admin under **Traveller messages**. Each is checked: no full names or addresses (first names and areas only), and a pickup code only in the traveller's own messages. WhatsApp goes first. We use an approved template outside the 24-hour window, and free-form with buttons inside it. SMS (with "Reply 1 for …") follows when WhatsApp fails or is not delivered within `messaging.delivery.whatsappDeliveryTimeoutSeconds`. Receipts also go by email. Every attempt is a `Notification` with its delivery status, shown on the booking page.
+- **Replies**: WhatsApp button taps, SMS number replies and simple typed words become booking events, once per provider message id. Signals reach the driver and ops rooms live. Anything unclear goes to **Travellers and support**.
+- **Masked calls** through Africa's Talking. Every attempt is a `CallLog` with its outcome and duration.
+- **Until the M4 driver app**, ops assigns drivers and corrects leg steps on the booking page, which sends the same messages the driver app will. Ops can also send any message by hand.
+
+### Trying it locally (fake providers)
+
+Open **http://localhost:3000/dev/phone?to=+234…** (development only). It shows what the fake WhatsApp, SMS and voice providers sent to that number. Reply buttons are tappable and go through the real signed webhooks. Fake test numbers:
+
+- ending `0000`: WhatsApp refuses the message
+- ending `0001`: WhatsApp accepts it but it is never delivered
+- ending `9999`: SMS fails
+
+`pnpm --filter @airwheels/api flow:m3` runs the whole message flow end to end. `pnpm --filter @airwheels/web exec playwright test e2e/traveller.spec.ts` runs the traveller journey in a browser. Both need the API running in development.
+
+### Real providers in test mode
+
+Set `ADAPTERS_MODE=live` and the keys below. Each provider switches to its live adapter only when all of its keys are set.
+
+| Provider                              | Keys                                                                                                                         | Webhook URL                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| WhatsApp Cloud API (Meta test number) | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`                          | `https://<tunnel>/v1/webhooks/messaging` (subscribe to `messages`)        |
+| Termii                                | `TERMII_API_KEY`, `TERMII_SENDER_ID` (optional `TERMII_CHANNEL`, default `generic`)                                          | `https://<tunnel>/v1/webhooks/sms`                                        |
+| Africa's Talking voice (sandbox)      | `AFRICASTALKING_USERNAME=sandbox`, `AFRICASTALKING_API_KEY`, `AFRICASTALKING_VOICE_NUMBER`, `AFRICASTALKING_CALLBACK_SECRET` | `https://<tunnel>/v1/webhooks/voice?key=<AFRICASTALKING_CALLBACK_SECRET>` |
+
+Notes:
+
+- **Meta:** add your phone as a recipient of the test number. Create the WhatsApp templates in WhatsApp Manager under the names shown in the admin (for example `booking_confirmed`), with the same placeholders in the same order and quick-reply buttons where listed.
+- **Termii:** inbound replies need a Termii number with two-way SMS.
+- **Africa's Talking:** set the voice callback URL on your virtual number.
+
+**Receiving webhooks locally through a tunnel.** Providers need a public HTTPS URL that reaches your API on port 4000. Use any tunnel, for example:
+
+```
+cloudflared tunnel --url http://localhost:4000
+# or
+ngrok http 4000
+```
+
+Put the printed `https://…` address into each provider's webhook setting as in the table. Set `API_PUBLIC_URL` to it too, so links and callbacks use it. Meta verifies the URL with a GET carrying `WHATSAPP_VERIFY_TOKEN`. Webhook bodies are checked against each provider's signature (or, for voice, the secret in the URL); unsigned calls get 403 or 404. Message text, phone numbers and codes are never logged.
 
 ## Notes and decisions
 

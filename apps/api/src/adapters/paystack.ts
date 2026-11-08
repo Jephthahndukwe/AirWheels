@@ -54,7 +54,11 @@ const toGateway = (t: PaystackTransaction): GatewayTransaction => ({
 });
 
 /** Paystack signs webhooks with HMAC-SHA512 of the raw body, keyed with the secret key. */
-export function paystackSignatureValid(secret: string, rawBody: Buffer, signature: string): boolean {
+export function paystackSignatureValid(
+  secret: string,
+  rawBody: Buffer,
+  signature: string,
+): boolean {
   if (!secret || !signature) return false;
   const expected = Buffer.from(createHmac('sha512', secret).update(rawBody).digest('hex'));
   const given = Buffer.from(signature);
@@ -69,7 +73,10 @@ export class PaystackPayments implements PaymentsAdapter {
     private readonly secret: string = process.env.PAYSTACK_SECRET_KEY ?? '',
     private readonly fetchImpl: typeof fetch = fetch,
   ) {
-    if (!/^sk_(test|live)_/.test(this.secret)) throw new Error('PAYSTACK_SECRET_KEY must be a Paystack secret key (sk_test_... or sk_live_...).');
+    if (!/^sk_(test|live)_/.test(this.secret))
+      throw new Error(
+        'PAYSTACK_SECRET_KEY must be a Paystack secret key (sk_test_... or sk_live_...).',
+      );
   }
 
   private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
@@ -79,7 +86,11 @@ export class PaystackPayments implements PaymentsAdapter {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     });
-    const json = (await res.json().catch(() => ({}))) as { status?: boolean; message?: string; data?: T };
+    const json = (await res.json().catch(() => ({}))) as {
+      status?: boolean;
+      message?: string;
+      data?: T;
+    };
     if (!res.ok || json.status === false) {
       // Only Paystack's message: never request bodies, which can carry customer details.
       this.log.warn({ path: path.split('?')[0], status: res.status }, 'Paystack call failed');
@@ -88,21 +99,36 @@ export class PaystackPayments implements PaymentsAdapter {
     return json.data as T;
   }
 
-  async initialize(input: { reference: string; amountKobo: number; email: string; callbackUrl: string; metadata?: Record<string, string> }) {
-    const data = await this.call<{ authorization_url: string; reference: string }>('POST', '/transaction/initialize', {
-      reference: input.reference,
-      amount: input.amountKobo,
-      currency: 'NGN',
-      email: input.email,
-      callback_url: input.callbackUrl,
-      metadata: input.metadata,
-    });
+  async initialize(input: {
+    reference: string;
+    amountKobo: number;
+    email: string;
+    callbackUrl: string;
+    metadata?: Record<string, string>;
+  }) {
+    const data = await this.call<{ authorization_url: string; reference: string }>(
+      'POST',
+      '/transaction/initialize',
+      {
+        reference: input.reference,
+        amount: input.amountKobo,
+        currency: 'NGN',
+        email: input.email,
+        callback_url: input.callbackUrl,
+        metadata: input.metadata,
+      },
+    );
     return { authorizationUrl: data.authorization_url, reference: data.reference };
   }
 
   async verify(reference: string) {
     try {
-      return toGateway(await this.call<PaystackTransaction>('GET', `/transaction/verify/${encodeURIComponent(reference)}`));
+      return toGateway(
+        await this.call<PaystackTransaction>(
+          'GET',
+          `/transaction/verify/${encodeURIComponent(reference)}`,
+        ),
+      );
     } catch (e) {
       if (e instanceof PaystackError && e.status === 404) return null;
       throw e;
@@ -114,8 +140,14 @@ export class PaystackPayments implements PaymentsAdapter {
   }
 
   async refund(reference: string, amountKobo: number) {
-    const data = await this.call<{ id: number; status: string }>('POST', '/refund', { transaction: reference, amount: amountKobo });
-    return { refundId: String(data.id), status: data.status === 'processed' ? ('processed' as const) : ('pending' as const) };
+    const data = await this.call<{ id: number; status: string }>('POST', '/refund', {
+      transaction: reference,
+      amount: amountKobo,
+    });
+    return {
+      refundId: String(data.id),
+      status: data.status === 'processed' ? ('processed' as const) : ('pending' as const),
+    };
   }
 
   async transfer(input: { recipientCode: string; amountKobo: number; reference: string }) {
@@ -131,7 +163,12 @@ export class PaystackPayments implements PaymentsAdapter {
   async listTransactions(from: Date, to: Date) {
     const out: GatewayTransaction[] = [];
     for (let page = 1; page <= 50; page++) {
-      const q = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), perPage: '100', page: String(page) });
+      const q = new URLSearchParams({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        perPage: '100',
+        page: String(page),
+      });
       const rows = await this.call<PaystackTransaction[]>('GET', `/transaction?${q.toString()}`);
       out.push(...rows.map(toGateway));
       if (rows.length < 100) break;

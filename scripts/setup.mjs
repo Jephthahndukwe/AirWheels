@@ -6,7 +6,8 @@ if (!existsSync('.env')) copyFileSync('.env.example', '.env');
 let env = readFileSync('.env', 'utf8');
 // Fill a key if it is empty, or add it if an older .env does not have it yet.
 const fill = (key, value) => {
-  if (new RegExp(`^${key}=`, 'm').test(env)) env = env.replace(new RegExp(`^${key}=$`, 'm'), `${key}=${value}`);
+  if (new RegExp(`^${key}=`, 'm').test(env))
+    env = env.replace(new RegExp(`^${key}=$`, 'm'), `${key}=${value}`);
   else env = `${env.trimEnd()}\n${key}=${value}\n`;
 };
 fill('APP_ENCRYPTION_KEY', randomBytes(32).toString('hex'));

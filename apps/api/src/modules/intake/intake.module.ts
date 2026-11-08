@@ -56,7 +56,10 @@ export class PartnerController {
 
   @Post('quotes')
   @ApiZodBody(PartnerQuoteRequest)
-  quote(@Req() req: PartnerRequest, @Body(new ZodPipe(PartnerQuoteRequest)) body: PartnerQuoteRequest) {
+  quote(
+    @Req() req: PartnerRequest,
+    @Body(new ZodPipe(PartnerQuoteRequest)) body: PartnerQuoteRequest,
+  ) {
     return this.pricing.quotePartner(body, req.airline);
   }
 
@@ -76,12 +79,17 @@ export class PartnerController {
           collectedBy: 'AIRLINE',
           payload: body,
         });
-        return { bookingId: b.id, status: b.status, airlineBookingReference: b.airlineBookingReference };
+        return {
+          bookingId: b.id,
+          status: b.status,
+          airlineBookingReference: b.airlineBookingReference,
+        };
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
           throw new ConflictException({
             code: 'BOOKING_EXISTS',
-            message: 'A transfer already exists for this booking reference. Use PATCH to change it.',
+            message:
+              'A transfer already exists for this booking reference. Use PATCH to change it.',
           });
         }
         throw e;
@@ -92,7 +100,11 @@ export class PartnerController {
   @Get('bookings/:ref')
   async get(@Req() req: PartnerRequest, @Param('ref') ref: string) {
     const b = await this.bookings.findByReference(req.airline.id, ref);
-    if (!b) throw new NotFoundException({ code: 'BOOKING_NOT_FOUND', message: 'No booking with that reference.' });
+    if (!b)
+      throw new NotFoundException({
+        code: 'BOOKING_NOT_FOUND',
+        message: 'No booking with that reference.',
+      });
     return b;
   }
 

@@ -31,11 +31,15 @@ export class PickupCodesService {
     const leg = await this.prisma.rideLeg.findUnique({ where: { id: legId } });
     if (!leg) throw new NotFoundException({ code: 'LEG_NOT_FOUND', message: 'No such leg.' });
     if (driverId !== undefined && leg.driverId !== driverId) {
-      throw new ForbiddenException({ code: 'NOT_YOUR_JOB', message: 'This job is not assigned to you.' });
+      throw new ForbiddenException({
+        code: 'NOT_YOUR_JOB',
+        message: 'This job is not assigned to you.',
+      });
     }
     const max = await this.config.get<number>(CONFIG.pickupCodeMaxAttempts);
     if (leg.pickupCodeLockedAt || leg.pickupCodeFailedAttempts >= max) return { result: 'LOCKED' };
-    if (pickupCodeHash(legId, leg.pickupCodeVersion, guess) === leg.pickupCodeHash) return { result: 'OK' };
+    if (pickupCodeHash(legId, leg.pickupCodeVersion, guess) === leg.pickupCodeHash)
+      return { result: 'OK' };
 
     // Count the miss atomically, then decide from the stored count, so parallel guesses
     // cannot slip past the limit or skip the lock.
@@ -44,7 +48,8 @@ export class PickupCodesService {
       data: { pickupCodeFailedAttempts: { increment: 1 } },
       select: { pickupCodeFailedAttempts: true, pickupCodeVersion: true },
     });
-    if (after.pickupCodeFailedAttempts < max) return { result: 'WRONG', attemptsLeft: max - after.pickupCodeFailedAttempts };
+    if (after.pickupCodeFailedAttempts < max)
+      return { result: 'WRONG', attemptsLeft: max - after.pickupCodeFailedAttempts };
 
     // Only the request that sets the lock raises the alert.
     const locked = await this.prisma.rideLeg.updateMany({
@@ -97,17 +102,19 @@ export class PickupCodesService {
       action: 'pickup_code.reissue',
       entity: 'RideLeg',
       entityId: legId,
-      before: { version: leg.pickupCodeVersion, failedAttempts: leg.pickupCodeFailedAttempts, locked: !!leg.pickupCodeLockedAt },
+      before: {
+        version: leg.pickupCodeVersion,
+        failedAttempts: leg.pickupCodeFailedAttempts,
+        locked: !!leg.pickupCodeLockedAt,
+      },
       after: { version, failedAttempts: 0, locked: false },
     });
     const t = leg.booking.traveller;
     if (t) {
-      await this.messaging.enqueueTraveller({
+      await this.messaging.notify('pickup_code.reissued', {
         bookingId: leg.bookingId,
-        event: `pickup_code.reissued.v${version}`,
-        to: t.phone,
-        whatsapp: t.whatsapp,
-        variables: { serviceName: leg.booking.airline?.serviceBrandName ?? 'Airwheels', pickupCode: code },
+        legId,
+        instance: `v${version}`,
       });
     }
     return { legId, version, travellerNotified: !!t };

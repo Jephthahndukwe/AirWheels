@@ -26,7 +26,11 @@ export class BookingStepsService {
     @InjectQueue(QUEUES.bookings) private readonly queue: Queue,
   ) {}
 
-  async run<T>(bookingId: string, step: BookingStepName, fn: () => Promise<T>): Promise<{ result: T | unknown; skipped: boolean }> {
+  async run<T>(
+    bookingId: string,
+    step: BookingStepName,
+    fn: () => Promise<T>,
+  ): Promise<{ result: T | unknown; skipped: boolean }> {
     const row = await this.prisma.bookingStep.upsert({
       where: { bookingId_step: { bookingId, step } },
       update: { attempts: { increment: 1 } },
@@ -37,11 +41,19 @@ export class BookingStepsService {
       const result = await fn();
       await this.prisma.bookingStep.update({
         where: { id: row.id },
-        data: { status: 'DONE', result: (result ?? null) as Prisma.InputJsonValue, error: null, completedAt: new Date() },
+        data: {
+          status: 'DONE',
+          result: (result ?? null) as Prisma.InputJsonValue,
+          error: null,
+          completedAt: new Date(),
+        },
       });
       return { result, skipped: false };
     } catch (e) {
-      await this.prisma.bookingStep.update({ where: { id: row.id }, data: { status: 'FAILED', error: (e as Error).message.slice(0, 500) } });
+      await this.prisma.bookingStep.update({
+        where: { id: row.id },
+        data: { status: 'FAILED', error: (e as Error).message.slice(0, 500) },
+      });
       throw e;
     }
   }
@@ -53,7 +65,10 @@ export class BookingStepsService {
       await this.queue.add('after-confirm', { bookingId } satisfies AfterConfirmJob, { jobId });
     } catch (err) {
       // The booking is safe in Postgres. The sweeper re-queues it within a minute.
-      this.log.error({ bookingId, err: (err as Error).message }, 'Could not queue booking steps; the sweeper will retry');
+      this.log.error(
+        { bookingId, err: (err as Error).message },
+        'Could not queue booking steps; the sweeper will retry',
+      );
     }
   }
 }

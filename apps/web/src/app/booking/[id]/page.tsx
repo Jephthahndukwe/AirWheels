@@ -1,7 +1,13 @@
 import { Footer } from '@/components/footer';
 import { BookingStatus } from './booking-status';
 
-export default async function BookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ t?: string }> }) {
+export default async function BookingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string }>;
+}) {
   const { id } = await params;
   const { t } = await searchParams;
   return (

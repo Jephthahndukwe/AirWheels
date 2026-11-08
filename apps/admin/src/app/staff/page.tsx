@@ -73,7 +73,11 @@ export default async function StaffPage() {
                 <Td>{i.role}</Td>
                 <Td>{lagosTime(i.expiresAt)}</Td>
                 <Td>
-                  <ActionButton action={revokeStaffInvite.bind(null, i.id)} label="Revoke" variant="danger" />
+                  <ActionButton
+                    action={revokeStaffInvite.bind(null, i.id)}
+                    label="Revoke"
+                    variant="danger"
+                  />
                 </Td>
               </tr>
             ))}
@@ -92,7 +96,9 @@ export default async function StaffPage() {
               <Td>{a.role}</Td>
               <Td>
                 <Badge tone={statusTone(a.status)}>{a.status.toLowerCase()}</Badge>
-                {a.lockedUntil && new Date(a.lockedUntil) > new Date() && <Badge tone="bad">locked</Badge>}
+                {a.lockedUntil && new Date(a.lockedUntil) > new Date() && (
+                  <Badge tone="bad">locked</Badge>
+                )}
               </Td>
               <Td>{a.twoFactor ? 'on' : 'off'}</Td>
               <Td>
@@ -103,15 +109,28 @@ export default async function StaffPage() {
                 {a.email !== me.email && (
                   <div className="flex flex-wrap gap-2">
                     {ROLES.filter(([r]) => r !== a.role).map(([r, l]) => (
-                      <ActionButton key={r} action={updateStaff.bind(null, a.id, { role: r })} label={`Make ${l.split(' ')[0]!.toLowerCase()}`} />
+                      <ActionButton
+                        key={r}
+                        action={updateStaff.bind(null, a.id, { role: r })}
+                        label={`Make ${l.split(' ')[0]!.toLowerCase()}`}
+                      />
                     ))}
                     <ActionButton
                       action={updateStaff.bind(null, a.id, { disabled: a.status === 'ACTIVE' })}
                       label={a.status === 'ACTIVE' ? 'Disable' : 'Enable'}
                       variant="danger"
-                      confirm={a.status === 'ACTIVE' ? `Disable ${a.name}? They are signed out at once.` : undefined}
+                      confirm={
+                        a.status === 'ACTIVE'
+                          ? `Disable ${a.name}? They are signed out at once.`
+                          : undefined
+                      }
                     />
-                    {a.lockedUntil && <ActionButton action={updateStaff.bind(null, a.id, { unlock: true })} label="Unlock" />}
+                    {a.lockedUntil && (
+                      <ActionButton
+                        action={updateStaff.bind(null, a.id, { unlock: true })}
+                        label="Unlock"
+                      />
+                    )}
                   </div>
                 )}
               </Td>
@@ -126,7 +145,13 @@ export default async function StaffPage() {
             <tr key={l.id}>
               <Td>{lagosTime(l.time)}</Td>
               <Td>{l.identifier}</Td>
-              <Td>{l.success ? <Badge tone="good">signed in</Badge> : <Badge tone="bad">{l.reason ?? 'failed'}</Badge>}</Td>
+              <Td>
+                {l.success ? (
+                  <Badge tone="good">signed in</Badge>
+                ) : (
+                  <Badge tone="bad">{l.reason ?? 'failed'}</Badge>
+                )}
+              </Td>
               <Td mono>{l.ip}</Td>
               <Td>
                 <span className="text-xs text-slate">{l.userAgent?.slice(0, 60)}</span>

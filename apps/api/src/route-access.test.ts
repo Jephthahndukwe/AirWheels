@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { type CallHandler, type INestApplication, type NestInterceptor, RequestMethod } from '@nestjs/common';
+import {
+  type CallHandler,
+  type INestApplication,
+  type NestInterceptor,
+  RequestMethod,
+} from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -38,24 +43,90 @@ const POLICY: Group[] = [
   { name: 'widget config', match: /^GET \/v1\/widget\//, allowed: 'PUBLIC' },
   { name: 'public quotes (our booking page)', match: /^POST \/v1\/quotes$/, allowed: 'PUBLIC' },
   { name: 'tracking page (token-scoped)', match: /^GET \/v1\/t\/:token$/, allowed: 'PUBLIC' },
+  {
+    name: 'tracking page actions (token, then six-digit code for change and cancel)',
+    match: /^POST \/v1\/t\/:token\/(code|code\/verify|changes|cancel|rating|emergency|call)$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'messaging and voice webhooks (signature or secret checked)',
+    match: /^(GET|POST) \/v1\/webhooks\/(messaging|sms|voice)$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'fake phone (development and tests only)',
+    match: /^(GET|POST) \/v1\/dev\/phone\/(outbox|inbound)$/,
+    allowed: 'PUBLIC',
+  },
   { name: 'dev storage (signed URLs)', match: /^(GET|PUT) \/v1\/fake-storage$/, allowed: 'PUBLIC' },
-  { name: 'address search (booking page)', match: /^GET \/v1\/places\/(search|reverse)$/, allowed: 'PUBLIC' },
-  { name: 'our booking page: book, pay, status (pay token)', match: /^(POST \/v1\/bookings|POST \/v1\/bookings\/:id\/pay|GET \/v1\/bookings\/:id)$/, allowed: 'PUBLIC' },
-  { name: 'Paystack webhook (signature checked)', match: /^POST \/v1\/webhooks\/payments$/, allowed: 'PUBLIC' },
-  { name: 'fake checkout (development and tests only)', match: /^POST \/v1\/dev\/fake-paystack\/:reference\/complete$/, allowed: 'PUBLIC' },
-  { name: 'admin sign-in doors', match: /^(POST \/v1\/admin\/auth\/login|GET \/v1\/admin\/auth\/invites\/:token|POST \/v1\/admin\/auth\/invites\/accept)$/, allowed: 'PUBLIC' },
-  { name: 'admin own session', match: /^(GET|POST) \/v1\/admin\/auth\/(me|logins|logout)$/, allowed: STAFF },
-  { name: 'driver sign-in doors', match: /^POST \/v1\/driver\/(activate\/(start|verify|complete)|login|login\/verify)$/, allowed: 'PUBLIC' },
+  {
+    name: 'address search (booking page)',
+    match: /^GET \/v1\/places\/(search|reverse)$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'our booking page: book, pay, status (pay token)',
+    match: /^(POST \/v1\/bookings|POST \/v1\/bookings\/:id\/pay|GET \/v1\/bookings\/:id)$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'Paystack webhook (signature checked)',
+    match: /^POST \/v1\/webhooks\/payments$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'fake checkout (development and tests only)',
+    match: /^POST \/v1\/dev\/fake-paystack\/:reference\/complete$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'admin sign-in doors',
+    match:
+      /^(POST \/v1\/admin\/auth\/login|GET \/v1\/admin\/auth\/invites\/:token|POST \/v1\/admin\/auth\/invites\/accept)$/,
+    allowed: 'PUBLIC',
+  },
+  {
+    name: 'admin own session',
+    match: /^(GET|POST) \/v1\/admin\/auth\/(me|logins|logout)$/,
+    allowed: STAFF,
+  },
+  {
+    name: 'driver sign-in doors',
+    match: /^POST \/v1\/driver\/(activate\/(start|verify|complete)|login|login\/verify)$/,
+    allowed: 'PUBLIC',
+  },
   { name: 'driver app', match: /^\w+ \/v1\/driver\//, allowed: ['DRIVER'] },
   { name: 'partner API', match: /^\w+ \/v1\/partner\//, allowed: ['PARTNER'] },
   { name: 'system jobs', match: /^\w+ \/v1\/system\//, allowed: ['SYSTEM'] },
   { name: 'staff and roles', match: /^\w+ \/v1\/admin\/staff/, allowed: SUPER },
-  { name: 'airline keys (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/airlines/, allowed: SUPER },
-  { name: 'config store (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/config/, allowed: SUPER },
+  {
+    name: 'airline keys (write)',
+    match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/airlines/,
+    allowed: SUPER,
+  },
+  {
+    name: 'config store (write)',
+    match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/config/,
+    allowed: SUPER,
+  },
+  {
+    name: 'message templates (write)',
+    match: /^POST \/v1\/admin\/message-templates/,
+    allowed: SUPER,
+  },
   { name: 'pricing rules (write)', match: /^POST \/v1\/admin\/pricing\/rules/, allowed: SUPER },
-  { name: 'driver reactivation', match: /^POST \/v1\/admin\/drivers\/:id\/reactivate$/, allowed: SUPER },
+  {
+    name: 'driver reactivation',
+    match: /^POST \/v1\/admin\/drivers\/:id\/reactivate$/,
+    allowed: SUPER,
+  },
   { name: 'admin reads', match: /^GET \/v1\/admin\//, allowed: STAFF },
-  { name: 'admin operations (write)', match: /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/(drivers|documents|vehicles|legs|alerts|bookings|payments|pricing\/simulate)/, allowed: STAFF_WRITE },
+  {
+    name: 'admin operations (write)',
+    match:
+      /^(POST|PUT|PATCH|DELETE) \/v1\/admin\/(drivers|documents|vehicles|legs|alerts|bookings|payments|pricing\/simulate)/,
+    allowed: STAFF_WRITE,
+  },
 ];
 
 const principalFor = (who: Who): Principal | null => {
@@ -63,13 +134,33 @@ const principalFor = (who: Who): Principal | null => {
     case 'ANONYMOUS':
       return null;
     case 'DRIVER':
-      return { kind: 'driver', role: 'DRIVER', userId: 'u', driverId: 'd', sessionId: 's', phone: '+2348000000000' };
+      return {
+        kind: 'driver',
+        role: 'DRIVER',
+        userId: 'u',
+        driverId: 'd',
+        sessionId: 's',
+        phone: '+2348000000000',
+      };
     case 'PARTNER':
-      return { kind: 'partner', role: 'PARTNER', airline: { id: 'a', code: 'MOCK' } as never, keyId: 'k' };
+      return {
+        kind: 'partner',
+        role: 'PARTNER',
+        airline: { id: 'a', code: 'MOCK' } as never,
+        keyId: 'k',
+      };
     case 'SYSTEM':
       return { kind: 'system', role: 'SYSTEM' };
     default:
-      return { kind: 'admin', role: who, userId: 'u', adminId: 'a', sessionId: 's', email: 'x@y.z', name: 'X' };
+      return {
+        kind: 'admin',
+        role: who,
+        userId: 'u',
+        adminId: 'a',
+        sessionId: 's',
+        email: 'x@y.z',
+        name: 'X',
+      };
   }
 };
 
@@ -102,9 +193,14 @@ beforeAll(async () => {
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrincipalResolver)
-    .useValue({ resolve: async (req: AuthedRequest) => principalFor((req.header('x-test-who') ?? 'ANONYMOUS') as Who) })
+    .useValue({
+      resolve: async (req: AuthedRequest) =>
+        principalFor((req.header('x-test-who') ?? 'ANONYMOUS') as Who),
+    })
     .overrideProvider(RateLimitService)
-    .useValue({ hit: async () => ({ allowed: true, retryAfterSeconds: 0, limit: 1, remaining: 1 }) })
+    .useValue({
+      hit: async () => ({ allowed: true, retryAfterSeconds: 0, limit: 1, remaining: 1 }),
+    })
     // The audit safety net records every allowed admin write; capture instead of writing to a database.
     .overrideProvider(AuditService)
     .useValue({ record: async (e: { action: string }) => audited.push(e.action) })
@@ -138,7 +234,9 @@ beforeAll(async () => {
       const sub = ([] as string[]).concat(Reflect.getMetadata(PATH_METADATA, fn) ?? '');
       for (const cp of ctrlPaths)
         for (const sp of sub) {
-          const path = `/v${version}/${[cp, sp].filter((p) => p && p !== '/').join('/')}`.replace(/\/+/g, '/').replace(/\/$/, '');
+          const path = `/v${version}/${[cp, sp].filter((p) => p && p !== '/').join('/')}`
+            .replace(/\/+/g, '/')
+            .replace(/\/$/, '');
           routes.push({ method: RequestMethod[method], path });
         }
     }
@@ -150,7 +248,8 @@ afterAll(async () => {
   await app?.close();
 });
 
-const concrete = (path: string) => path.replace(/:[a-zA-Z]+/g, '3f2b6c1e-8d4a-4c2b-9e1f-0a1b2c3d4e5f');
+const concrete = (path: string) =>
+  path.replace(/:[a-zA-Z]+/g, '3f2b6c1e-8d4a-4c2b-9e1f-0a1b2c3d4e5f');
 
 describe('route access by role', () => {
   it('finds the routes', () => {
@@ -158,7 +257,9 @@ describe('route access by role', () => {
   });
 
   it('every route belongs to a policy group', () => {
-    const unmatched = routes.filter((r) => !POLICY.some((g) => g.match.test(`${r.method} ${r.path}`)));
+    const unmatched = routes.filter(
+      (r) => !POLICY.some((g) => g.match.test(`${r.method} ${r.path}`)),
+    );
     expect(unmatched).toEqual([]);
   });
 
@@ -180,10 +281,16 @@ describe('route access by role', () => {
           calls++;
           const reached = res.status >= 200 && res.status < 300;
           const shouldReach = group.allowed === 'PUBLIC' || group.allowed.includes(who);
-          if (reached !== shouldReach) mismatches.push(`${who} ${r.method} ${r.path} -> ${res.status} (group "${group.name}")`);
+          if (reached !== shouldReach)
+            mismatches.push(
+              `${who} ${r.method} ${r.path} -> ${res.status} (group "${group.name}")`,
+            );
           if (!reached && !shouldReach) {
             const expected = who === 'ANONYMOUS' ? 401 : 403;
-            if (res.status !== expected) mismatches.push(`${who} ${r.method} ${r.path} -> ${res.status}, expected ${expected}`);
+            if (res.status !== expected)
+              mismatches.push(
+                `${who} ${r.method} ${r.path} -> ${res.status}, expected ${expected}`,
+              );
           }
         }),
       );
@@ -191,7 +298,12 @@ describe('route access by role', () => {
     expect(mismatches).toEqual([]);
     expect(calls).toBe(routes.length * EVERYONE.length);
     // Every allowed admin write went through the audit safety net (no service ran, so it recorded the call itself).
-    const adminWrites = routes.filter((r) => r.method !== 'GET' && r.path.startsWith('/v1/admin/') && !/\/auth\/(login|invites)/.test(r.path));
+    const adminWrites = routes.filter(
+      (r) =>
+        r.method !== 'GET' &&
+        r.path.startsWith('/v1/admin/') &&
+        !/\/auth\/(login|invites)/.test(r.path),
+    );
     expect(audited.length).toBeGreaterThanOrEqual(adminWrites.length);
   }, 300_000);
 
@@ -199,9 +311,15 @@ describe('route access by role', () => {
     const writes = routes.filter((r) => r.method !== 'GET');
     const reached: string[] = [];
     for (const r of writes) {
-      const res = await fetch(`${base}${concrete(r.path)}`, { method: r.method, headers: { 'x-test-who': 'FINANCE', 'content-type': 'application/json' }, body: '{}' });
-      const isPublic = POLICY.find((g) => g.match.test(`${r.method} ${r.path}`))!.allowed === 'PUBLIC';
-      if (res.status >= 200 && res.status < 300 && !isPublic && r.path !== '/v1/admin/auth/logout') reached.push(`${r.method} ${r.path}`);
+      const res = await fetch(`${base}${concrete(r.path)}`, {
+        method: r.method,
+        headers: { 'x-test-who': 'FINANCE', 'content-type': 'application/json' },
+        body: '{}',
+      });
+      const isPublic =
+        POLICY.find((g) => g.match.test(`${r.method} ${r.path}`))!.allowed === 'PUBLIC';
+      if (res.status >= 200 && res.status < 300 && !isPublic && r.path !== '/v1/admin/auth/logout')
+        reached.push(`${r.method} ${r.path}`);
     }
     expect(reached).toEqual([]);
   });

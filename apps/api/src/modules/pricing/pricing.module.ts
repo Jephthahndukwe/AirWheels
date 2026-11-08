@@ -58,10 +58,22 @@ export class PlacesController {
   @RateLimit('places')
   async reverse(@Query('lat') lat?: string, @Query('lng') lng?: string) {
     const point = { lat: Number(lat), lng: Number(lng) };
-    if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
+    if (
+      !Number.isFinite(point.lat) ||
+      !Number.isFinite(point.lng) ||
+      Math.abs(point.lat) > 90 ||
+      Math.abs(point.lng) > 180
+    ) {
       throw new BadRequestException({ code: 'POINT_INVALID', message: 'Drop the pin on the map.' });
     }
-    return (await this.maps.reverseGeocode(point)) ?? { placeId: 'pin', name: 'Dropped pin', description: 'Dropped pin', location: point };
+    return (
+      (await this.maps.reverseGeocode(point)) ?? {
+        placeId: 'pin',
+        name: 'Dropped pin',
+        description: 'Dropped pin',
+        location: point,
+      }
+    );
   }
 }
 
@@ -98,9 +110,15 @@ export class AdminPricingController {
       orderBy: [{ type: 'asc' }, { key: 'asc' }, { version: 'desc' }],
     });
     const now = new Date();
-    const inForce = new Set((await this.pricing.rulesAt(now).catch(() => ({ rows: [] }))).rows.map((r) => r.id));
+    const inForce = new Set(
+      (await this.pricing.rulesAt(now).catch(() => ({ rows: [] }))).rows.map((r) => r.id),
+    );
     return {
-      rules: rows.map((r) => ({ ...r, inForce: inForce.has(r.id), scheduled: r.effectiveFrom > now })),
+      rules: rows.map((r) => ({
+        ...r,
+        inForce: inForce.has(r.id),
+        scheduled: r.effectiveFrom > now,
+      })),
       types: RULE_TYPES.map((t) => ({ type: t, help: RULE_SCHEMAS[t].help })),
     };
   }
@@ -114,10 +132,21 @@ export class AdminPricingController {
     if (problem) throw new BadRequestException({ code: 'RULE_INVALID', message: problem });
     const effectiveFrom = body.effectiveFrom ?? new Date();
     if (effectiveFrom.getTime() < Date.now() - 60_000) {
-      throw new BadRequestException({ code: 'RULE_BACKDATED', message: 'A new version cannot start in the past: quotes already given must keep their rules.' });
+      throw new BadRequestException({
+        code: 'RULE_BACKDATED',
+        message:
+          'A new version cannot start in the past: quotes already given must keep their rules.',
+      });
     }
-    if (body.effectiveTo && body.effectiveTo <= effectiveFrom) throw new BadRequestException({ code: 'RULE_DATES', message: 'The end must be after the start.' });
-    const previous = await this.prisma.pricingRule.findFirst({ where: { type: body.type, key: body.key }, orderBy: { version: 'desc' } });
+    if (body.effectiveTo && body.effectiveTo <= effectiveFrom)
+      throw new BadRequestException({
+        code: 'RULE_DATES',
+        message: 'The end must be after the start.',
+      });
+    const previous = await this.prisma.pricingRule.findFirst({
+      where: { type: body.type, key: body.key },
+      orderBy: { version: 'desc' },
+    });
     const rule = await this.prisma.pricingRule.create({
       data: {
         type: body.type,
@@ -133,8 +162,22 @@ export class AdminPricingController {
       action: 'pricing.rule_version',
       entity: 'PricingRule',
       entityId: rule.id,
-      before: previous ? { version: previous.version, values: previous.values, effectiveFrom: previous.effectiveFrom, effectiveTo: previous.effectiveTo } : undefined,
-      after: { type: rule.type, key: rule.key, version: rule.version, values: rule.values, effectiveFrom: rule.effectiveFrom, effectiveTo: rule.effectiveTo },
+      before: previous
+        ? {
+            version: previous.version,
+            values: previous.values,
+            effectiveFrom: previous.effectiveFrom,
+            effectiveTo: previous.effectiveTo,
+          }
+        : undefined,
+      after: {
+        type: rule.type,
+        key: rule.key,
+        version: rule.version,
+        values: rule.values,
+        effectiveFrom: rule.effectiveFrom,
+        effectiveTo: rule.effectiveTo,
+      },
     });
     return rule;
   }
@@ -144,14 +187,27 @@ export class AdminPricingController {
   @HttpCode(200)
   @SuperAdminOnly()
   @ApiZodBody(EndRule)
-  async end(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(EndRule)) body: z.infer<typeof EndRule>) {
+  async end(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(EndRule)) body: z.infer<typeof EndRule>,
+  ) {
     const before = await this.prisma.pricingRule.findUnique({ where: { id } });
     if (!before) throw new NotFoundException({ code: 'RULE_NOT_FOUND', message: 'No such rule.' });
     const effectiveTo = body.effectiveTo ?? new Date();
-    if (effectiveTo.getTime() < Date.now() - 60_000) throw new BadRequestException({ code: 'RULE_BACKDATED', message: 'A rule cannot be ended in the past.' });
+    if (effectiveTo.getTime() < Date.now() - 60_000)
+      throw new BadRequestException({
+        code: 'RULE_BACKDATED',
+        message: 'A rule cannot be ended in the past.',
+      });
     const rule = await this.prisma.pricingRule.update({ where: { id }, data: { effectiveTo } });
     this.pricing.invalidate();
-    await this.audit.record({ action: 'pricing.rule_end', entity: 'PricingRule', entityId: id, before: { effectiveTo: before.effectiveTo }, after: { effectiveTo } });
+    await this.audit.record({
+      action: 'pricing.rule_end',
+      entity: 'PricingRule',
+      entityId: id,
+      before: { effectiveTo: before.effectiveTo },
+      after: { effectiveTo },
+    });
     return rule;
   }
 
@@ -162,8 +218,19 @@ export class AdminPricingController {
   @ApiZodBody(Simulate)
   async simulate(@Body(new ZodPipe(Simulate)) body: z.infer<typeof Simulate>) {
     const { quote, response } = await this.pricing.quoteOwn(body, 'OPS');
-    const b = quote.breakdown as { marginKobo: number; estimatedCostKobo: number; flagReasons: string[]; legs: { cost: unknown; marginKobo: number }[] };
-    return { ...response, marginKobo: b.marginKobo, estimatedCostKobo: b.estimatedCostKobo, flagReasons: b.flagReasons, costs: b.legs.map((l) => l.cost) };
+    const b = quote.breakdown as {
+      marginKobo: number;
+      estimatedCostKobo: number;
+      flagReasons: string[];
+      legs: { cost: unknown; marginKobo: number }[];
+    };
+    return {
+      ...response,
+      marginKobo: b.marginKobo,
+      estimatedCostKobo: b.estimatedCostKobo,
+      flagReasons: b.flagReasons,
+      costs: b.legs.map((l) => l.cost),
+    };
   }
 }
 

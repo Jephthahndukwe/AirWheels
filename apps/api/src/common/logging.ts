@@ -11,7 +11,9 @@ export const loggerParams: Params = {
     level: process.env.LOG_LEVEL ?? 'info',
     genReqId: (req: IncomingMessage) =>
       (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
-    customProps: (req: IncomingMessage) => ({ requestId: (req as IncomingMessage & { id: string }).id }),
+    customProps: (req: IncomingMessage) => ({
+      requestId: (req as IncomingMessage & { id: string }).id,
+    }),
     redact: {
       paths: [
         'req.headers.authorization',
@@ -21,6 +23,8 @@ export const loggerParams: Params = {
       censor: '[redacted]',
     },
     transport:
-      process.env.NODE_ENV === 'development' ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
+      process.env.NODE_ENV === 'development'
+        ? { target: 'pino-pretty', options: { singleLine: true } }
+        : undefined,
   },
 };

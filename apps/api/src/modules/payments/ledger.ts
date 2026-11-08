@@ -14,15 +14,27 @@ export interface AccountDef {
 }
 
 export const ACCOUNTS = {
-  customerPayments: { code: 'customer_payments_received', name: 'Customer payments received (our channel, Paystack)', type: 'ASSET' },
+  customerPayments: {
+    code: 'customer_payments_received',
+    name: 'Customer payments received (our channel, Paystack)',
+    type: 'ASSET',
+  },
   rideRevenue: { code: 'ride_revenue', name: 'Ride revenue', type: 'REVENUE' },
   driverPayable: { code: 'driver_payable', name: 'Driver payable', type: 'LIABILITY' },
-  carPartnerPayable: { code: 'car_partner_payable', name: 'Car partner usage payable', type: 'LIABILITY' },
+  carPartnerPayable: {
+    code: 'car_partner_payable',
+    name: 'Car partner usage payable',
+    type: 'LIABILITY',
+  },
   refunds: { code: 'refunds', name: 'Refunds', type: 'EXPENSE' },
   gatewayFees: { code: 'gateway_fees', name: 'Payment gateway fees', type: 'EXPENSE' },
   disruptionReserve: { code: 'disruption_reserve', name: 'Disruption reserve', type: 'LIABILITY' },
   taxes: { code: 'taxes_payable', name: 'Taxes payable', type: 'LIABILITY' },
-  airportFees: { code: 'airport_fees_payable', name: 'Airport fees payable (passed through)', type: 'LIABILITY' },
+  airportFees: {
+    code: 'airport_fees_payable',
+    name: 'Airport fees payable (passed through)',
+    type: 'LIABILITY',
+  },
   driverCosts: { code: 'driver_costs', name: 'Driver costs', type: 'EXPENSE' },
   carPartnerCosts: { code: 'car_partner_costs', name: 'Car partner costs', type: 'EXPENSE' },
 } as const satisfies Record<string, AccountDef & { code: string }>;
@@ -63,20 +75,33 @@ export class LedgerImbalanceError extends Error {
 }
 
 export function assertBalanced(p: Posting): void {
-  if (p.lines.length < 2) throw new LedgerImbalanceError(`${p.reference}: a posting needs at least two lines.`);
+  if (p.lines.length < 2)
+    throw new LedgerImbalanceError(`${p.reference}: a posting needs at least two lines.`);
   for (const l of p.lines) {
     if (!Number.isSafeInteger(l.amountKobo) || l.amountKobo <= 0) {
-      throw new LedgerImbalanceError(`${p.reference}: every line must be a positive whole number of kobo (${l.account.code}: ${l.amountKobo}).`);
+      throw new LedgerImbalanceError(
+        `${p.reference}: every line must be a positive whole number of kobo (${l.account.code}: ${l.amountKobo}).`,
+      );
     }
   }
-  const sum = (d: LedgerDirection) => p.lines.filter((l) => l.direction === d).reduce((s, l) => s + l.amountKobo, 0);
+  const sum = (d: LedgerDirection) =>
+    p.lines.filter((l) => l.direction === d).reduce((s, l) => s + l.amountKobo, 0);
   const dr = sum('DEBIT');
   const cr = sum('CREDIT');
-  if (dr !== cr) throw new LedgerImbalanceError(`${p.reference}: debits ${dr} do not equal credits ${cr}.`);
+  if (dr !== cr)
+    throw new LedgerImbalanceError(`${p.reference}: debits ${dr} do not equal credits ${cr}.`);
 }
 
-const dr = (account: Account, amountKobo: number): PostingLine => ({ account, direction: 'DEBIT', amountKobo });
-const cr = (account: Account, amountKobo: number): PostingLine => ({ account, direction: 'CREDIT', amountKobo });
+const dr = (account: Account, amountKobo: number): PostingLine => ({
+  account,
+  direction: 'DEBIT',
+  amountKobo,
+});
+const cr = (account: Account, amountKobo: number): PostingLine => ({
+  account,
+  direction: 'CREDIT',
+  amountKobo,
+});
 
 /** Drop zero lines (a booking with no tax has no tax line), then check the balance. */
 function build(p: Posting): Posting {
@@ -113,14 +138,17 @@ const checkSale = (s: SaleAmounts) => {
  * then the airline's share (if the agreement has one) and the Flex reserve come out of revenue,
  * and the gateway fee is an expense taken from what Paystack settles.
  */
-export function ourChannelPayment(input: SaleAmounts & {
-  reference: string;
-  bookingId: string;
-  gatewayFeeKobo: number;
-  airline?: { id: string; code: string } | null;
-}): Posting {
+export function ourChannelPayment(
+  input: SaleAmounts & {
+    reference: string;
+    bookingId: string;
+    gatewayFeeKobo: number;
+    airline?: { id: string; code: string } | null;
+  },
+): Posting {
   const fare = checkSale(input);
-  if (input.airlineShareKobo > 0 && !input.airline) throw new LedgerImbalanceError('A revenue share needs an airline.');
+  if (input.airlineShareKobo > 0 && !input.airline)
+    throw new LedgerImbalanceError('A revenue share needs an airline.');
   return build({
     reference: input.reference,
     kind: 'payment.our_channel',
@@ -132,7 +160,9 @@ export function ourChannelPayment(input: SaleAmounts & {
       cr(ACCOUNTS.airportFees, input.airportFeeKobo),
       cr(ACCOUNTS.taxes, input.taxKobo),
       dr(ACCOUNTS.rideRevenue, input.airlineShareKobo),
-      ...(input.airline ? [cr(airlineRevenueShare(input.airline.id, input.airline.code), input.airlineShareKobo)] : []),
+      ...(input.airline
+        ? [cr(airlineRevenueShare(input.airline.id, input.airline.code), input.airlineShareKobo)]
+        : []),
       dr(ACCOUNTS.rideRevenue, input.disruptionReserveKobo),
       cr(ACCOUNTS.disruptionReserve, input.disruptionReserveKobo),
       dr(ACCOUNTS.gatewayFees, input.gatewayFeeKobo),
@@ -145,7 +175,13 @@ export function ourChannelPayment(input: SaleAmounts & {
  * Airline-collected (14.1): the airline owes us the full price and we owe it its share; the
  * settlement statement nets the two (M5).
  */
-export function airlineCollectedSale(input: SaleAmounts & { reference: string; bookingId: string; airline: { id: string; code: string } }): Posting {
+export function airlineCollectedSale(
+  input: SaleAmounts & {
+    reference: string;
+    bookingId: string;
+    airline: { id: string; code: string };
+  },
+): Posting {
   const fare = checkSale(input);
   return build({
     reference: input.reference,
@@ -176,19 +212,31 @@ export function refund(input: {
   route: 'PAYSTACK' | 'AIRLINE';
   airline?: { id: string; code: string } | null;
 }): Posting {
-  if (input.route === 'AIRLINE' && !input.airline) throw new LedgerImbalanceError('An airline refund needs the airline.');
-  const credit = input.route === 'PAYSTACK' ? ACCOUNTS.customerPayments : airlineReceivable(input.airline!.id, input.airline!.code);
+  if (input.route === 'AIRLINE' && !input.airline)
+    throw new LedgerImbalanceError('An airline refund needs the airline.');
+  const credit =
+    input.route === 'PAYSTACK'
+      ? ACCOUNTS.customerPayments
+      : airlineReceivable(input.airline!.id, input.airline!.code);
   return build({
     reference: input.reference,
     kind: `refund.${input.route.toLowerCase()}`,
     bookingId: input.bookingId,
-    memo: input.route === 'PAYSTACK' ? 'Refund to the original payment method' : 'Refund adjustment on the airline statement',
+    memo:
+      input.route === 'PAYSTACK'
+        ? 'Refund to the original payment method'
+        : 'Refund adjustment on the airline statement',
     lines: [dr(ACCOUNTS.refunds, input.amountKobo), cr(credit, input.amountKobo)],
   });
 }
 
 /** A completed leg (M4 calls this): what we owe the driver and the car partner for it. */
-export function legCompleted(input: { reference: string; bookingId: string; driverKobo: number; carPartnerKobo: number }): Posting {
+export function legCompleted(input: {
+  reference: string;
+  bookingId: string;
+  driverKobo: number;
+  carPartnerKobo: number;
+}): Posting {
   return build({
     reference: input.reference,
     kind: 'leg.completed',

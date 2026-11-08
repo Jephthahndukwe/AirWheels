@@ -49,5 +49,8 @@ export function lagosParts(at: Date): { date: string; hour: number } {
 @Injectable()
 export class DispatchService {}
 
-@Module({ providers: [DispatchService, PickupTimesService], exports: [DispatchService, PickupTimesService] })
+@Module({
+  providers: [DispatchService, PickupTimesService],
+  exports: [DispatchService, PickupTimesService],
+})
 export class DispatchModule {}

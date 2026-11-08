@@ -10,7 +10,9 @@ import { decrypt, encrypt, isCurrent } from '../src/common/crypto';
 const prisma = new PrismaClient();
 
 async function main() {
-  const creds = await prisma.airlineCredential.findMany({ select: { id: true, keyId: true, secretEncrypted: true } });
+  const creds = await prisma.airlineCredential.findMany({
+    select: { id: true, keyId: true, secretEncrypted: true },
+  });
   let rotated = 0;
   for (const c of creds) {
     if (isCurrent(c.secretEncrypted)) continue;
