@@ -74,10 +74,13 @@ jobs:
       - name: M3 flow (messages, SMS fallback, reply buttons, calls, tracking, change and cancel codes)
         run: pnpm --filter @airwheels/api flow:m3
       - name: Traveller journey in a browser (slow 3G, low-end phone, tracking page under 200 KB)
+        # The web app is measured as shipped: a production build. The API stays in development (fakes).
+        env:
+          NODE_ENV: production
         run: |
           pnpm --filter @airwheels/web... build
           pnpm --filter @airwheels/web exec playwright install --with-deps chromium
-          pnpm --filter @airwheels/web exec playwright test e2e/traveller.spec.ts
+          pnpm --filter @airwheels/web exec playwright test e2e/traveller.spec.ts --reporter=github,line
       - if: failure()
         run: cat api.log
 
